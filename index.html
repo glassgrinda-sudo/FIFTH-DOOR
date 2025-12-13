@@ -1,9 +1,4 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/shaders/FilmShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/shaders/VignetteShader.js"></script>
 
 <script>
 /* ================= CORE ================= */
@@ -11,106 +6,110 @@ const canvas = document.getElementById("c");
 const overlay = document.getElementById("overlay");
 const statusEl = document.getElementById("status");
 
-/* ================= AUDIO ================= */
-const lobbySound = document.getElementById("lobbySound");
-const gameSound  = document.getElementById("gameSound");
-lobbySound.volume = 0;
-gameSound.volume = 0;
-
-function fadeIn(a,v=1,s=0.01){
-  a.play();
-  const i=setInterval(()=>{a.volume=Math.min(v,a.volume+s);if(a.volume>=v)clearInterval(i)},30);
-}
-function fadeOut(a,s=0.02){
-  const i=setInterval(()=>{a.volume=Math.max(0,a.volume-s);if(a.volume<=0){a.pause();clearInterval(i)}},30);
-}
-
 /* ================= RENDERER ================= */
-const renderer = new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:"high-performance"});
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias:true,
+  powerPreference:"high-performance"
+});
 renderer.setSize(innerWidth,innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setClearColor(0x040404,1);
-renderer.physicallyCorrectLights=true;
-renderer.outputColorSpace=THREE.SRGBColorSpace;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.1;
-renderer.shadowMap.enabled=true;
+renderer.setClearColor(0x050505,1);
+renderer.physicallyCorrectLights = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 /* ================= SCENE ================= */
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x050505,4,26);
+scene.fog = new THREE.Fog(0x050505, 4, 26);
 
 /* ================= CAMERA ================= */
-const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,70);
+const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,60);
 camera.position.set(0,1.7,9);
 scene.add(camera);
 
 /* ================= LIGHTING ================= */
 scene.add(new THREE.AmbientLight(0x1a1a1a,0.25));
 
-const ceilingLight = new THREE.PointLight(0xfff0d8,16,20,2);
+const ceilingLight = new THREE.PointLight(0xfff0d8, 18, 18, 2);
 ceilingLight.position.set(0,3.4,-1);
-ceilingLight.castShadow=true;
+ceilingLight.castShadow = true;
 scene.add(ceilingLight);
 
-const doorLight = new THREE.SpotLight(0xffd2aa,32,30,Math.PI/7,0.6);
+const doorLight = new THREE.SpotLight(0xffd2aa, 35, 30, Math.PI/7, 0.5);
 doorLight.position.set(0,3,-3);
 doorLight.target.position.set(0,1.6,-7);
-doorLight.castShadow=true;
-scene.add(doorLight,doorLight.target);
+doorLight.castShadow = true;
+scene.add(doorLight);
+scene.add(doorLight.target);
 
 /* ================= FLASHLIGHT ================= */
-const flashlight = new THREE.SpotLight(0xffffff,6,10,Math.PI/9,0.9);
+const flashlight = new THREE.SpotLight(0xffffff, 6, 10, Math.PI/9, 0.9);
 flashlight.position.set(0,0,0);
 flashlight.target.position.set(0,0,-1);
-camera.add(flashlight,flashlight.target);
+camera.add(flashlight);
+camera.add(flashlight.target);
 
 /* ================= MATERIALS ================= */
-const wallMat = new THREE.MeshStandardMaterial({color:0x202020,roughness:0.95});
-const floorMat = new THREE.MeshStandardMaterial({color:0x141414,roughness:0.9});
-const doorMat = new THREE.MeshStandardMaterial({color:0x5a1414,roughness:0.6,metalness:0.15});
+const wallMat = new THREE.MeshStandardMaterial({
+  color:0x202020,
+  roughness:0.95
+});
+const floorMat = new THREE.MeshStandardMaterial({
+  color:0x141414,
+  roughness:0.9
+});
+const doorMat = new THREE.MeshStandardMaterial({
+  color:0x5a1414,
+  roughness:0.65,
+  metalness:0.15
+});
 
 /* ================= GEOMETRY ================= */
-const hallway = new THREE.Mesh(new THREE.BoxGeometry(4.2,4,14),wallMat);
-hallway.position.z=-3;
-hallway.receiveShadow=true;
+const hallway = new THREE.Mesh(
+  new THREE.BoxGeometry(4.2,4,14),
+  wallMat
+);
+hallway.position.z = -3;
+hallway.receiveShadow = true;
 scene.add(hallway);
 
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(4.2,14),floorMat);
-floor.rotation.x=-Math.PI/2;
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(4.2,14),
+  floorMat
+);
+floor.rotation.x = -Math.PI/2;
 floor.position.set(0,0,-3);
-floor.receiveShadow=true;
+floor.receiveShadow = true;
 scene.add(floor);
 
-const door = new THREE.Mesh(new THREE.BoxGeometry(2,3.6,0.3),doorMat);
+const door = new THREE.Mesh(
+  new THREE.BoxGeometry(2,3.6,0.3),
+  doorMat
+);
 door.position.set(0,1.8,-7);
-door.castShadow=true;
+door.castShadow = true;
 scene.add(door);
 
 /* ================= HAND ================= */
 const hand = new THREE.Mesh(
   new THREE.BoxGeometry(.18,.28,.45),
-  new THREE.MeshStandardMaterial({color:0x8a6a55,roughness:0.55})
+  new THREE.MeshStandardMaterial({
+    color:0x8a6a55,
+    roughness:0.55
+  })
 );
 hand.position.set(.42,-.42,-1);
 camera.add(hand);
 
-/* ================= POST ================= */
-const composer = new THREE.EffectComposer(renderer);
-composer.addPass(new THREE.RenderPass(scene,camera));
-
-const film = new THREE.ShaderPass(THREE.FilmShader);
-film.uniforms.grainIntensity.value=0.12;
-film.uniforms.noiseIntensity.value=0.18;
-composer.addPass(film);
-
-const vignette = new THREE.ShaderPass(THREE.VignetteShader);
-vignette.uniforms.darkness.value=1.3;
-vignette.uniforms.offset.value=0.9;
-composer.addPass(vignette);
-
 /* ================= STATE ================= */
-let started=false, enterTime=0, dragged=false, blackout=0;
+let started=false;
+let enterTime=0;
+let dragged=false;
+let blackout=0;
 
 /* ================= ENTER ================= */
 function enterGame(){
@@ -120,8 +119,6 @@ function enterGame(){
   overlay.classList.add("fade");
   document.documentElement.requestFullscreen?.();
   canvas.requestPointerLock?.();
-  fadeOut(lobbySound,0.02);
-  setTimeout(()=>fadeIn(gameSound,0.6,0.01),1200);
   enterTime=performance.now();
 }
 
@@ -130,54 +127,67 @@ function triggerDrag(){
   if(dragged) return;
   dragged=true;
   blackout=performance.now();
-  fadeOut(gameSound,0.08);
 }
 
 /* ================= INPUT ================= */
 addEventListener("keydown",e=>{
-  if(e.code==="Space"){
-    if(!started){
-      fadeIn(lobbySound,0.5,0.01);
-      enterGame();
-    }
-  }
+  if(e.code==="Space") enterGame();
 });
 
 /* ================= LOOP ================= */
 function animate(){
   requestAnimationFrame(animate);
-  const t=performance.now()/1000;
+  const now = performance.now()/1000;
 
-  // light flicker
-  ceilingLight.intensity = 16 + Math.sin(t*6)*0.6 + Math.sin(t*17)*0.3;
+  // Subtle light flicker
+  ceilingLight.intensity =
+    18 +
+    Math.sin(now*6)*0.7 +
+    Math.sin(now*17)*0.3;
 
   if(started){
-    const p=(performance.now()-enterTime)/1000;
-    camera.position.z=THREE.MathUtils.lerp(9,4,Math.min(p/2,1));
-    camera.position.y=1.7+Math.sin(t*0.6)*0.02;
-    hand.position.y=-0.42+Math.sin(t*1.8)*0.025;
-    if(camera.position.z<5 && !dragged) setTimeout(triggerDrag,700);
+    const t=(performance.now()-enterTime)/1000;
+
+    camera.position.z =
+      THREE.MathUtils.lerp(9,4,Math.min(t/2,1));
+
+    camera.position.y =
+      1.7 + Math.sin(now*0.6)*0.02;
+
+    hand.position.y =
+      -0.42 + Math.sin(now*1.8)*0.025;
+
+    if(camera.position.z < 5 && !dragged){
+      setTimeout(triggerDrag,700);
+    }
   }
 
   if(dragged){
     const d=(performance.now()-blackout)/1000;
-    camera.position.x=Math.sin(d*14)*0.3;
-    camera.rotation.z=Math.sin(d*40)*0.05;
-    ceilingLight.intensity=THREE.MathUtils.lerp(16,0,Math.min(d/0.4,1));
-    doorLight.intensity=THREE.MathUtils.lerp(32,0,Math.min(d/0.4,1));
-    flashlight.intensity=THREE.MathUtils.lerp(6,0,Math.min(d/0.3,1));
-    if(d>0.35) renderer.setClearColor(0x000000,1);
+
+    camera.position.x = Math.sin(d*14)*0.3;
+    camera.rotation.z = Math.sin(d*40)*0.05;
+
+    ceilingLight.intensity =
+      THREE.MathUtils.lerp(18,0,Math.min(d/0.4,1));
+    doorLight.intensity =
+      THREE.MathUtils.lerp(35,0,Math.min(d/0.4,1));
+    flashlight.intensity =
+      THREE.MathUtils.lerp(6,0,Math.min(d/0.3,1));
+
+    if(d>0.35){
+      renderer.setClearColor(0x000000,1);
+    }
   }
 
-  composer.render();
+  renderer.render(scene,camera);
 }
 animate();
 
 /* ================= RESIZE ================= */
 addEventListener("resize",()=>{
-  camera.aspect=innerWidth/innerHeight;
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
-  composer.setSize(innerWidth,innerHeight);
 });
 </script>
