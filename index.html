@@ -4,142 +4,180 @@
 <meta charset="UTF-8">
 <title>FIFTH DOOR</title>
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#000}
-#ui{
- position:absolute;top:20px;left:20px;color:#ccc;
- background:rgba(0,0,0,0.6);padding:12px;border-radius:6px;
- font-family:Arial;z-index:10
+html,body{
+  margin:0;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  font-family:Arial, sans-serif;
 }
 canvas{display:block}
+
+#ui{
+  position:absolute;
+  top:20px;
+  left:20px;
+  color:#ccc;
+  background:rgba(0,0,0,0.65);
+  padding:12px 16px;
+  border-radius:6px;
+  z-index:10;
+}
+
+#overlay{
+  position:fixed;
+  inset:0;
+  background:#000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  color:#aaa;
+  font-size:18px;
+  letter-spacing:1px;
+  z-index:20;
+}
+#overlay small{
+  margin-top:12px;
+  opacity:0.6;
+  font-size:14px;
+}
+.hidden{display:none}
 </style>
 </head>
 <body>
 
 <div id="ui">
-<b>FIFTH DOOR</b><br>
-<span id="status">Waiting…</span>
+  <b>FIFTH DOOR</b><br>
+  <span id="status">Waiting…</span>
+</div>
+
+<div id="overlay">
+  <div>PRESS SPACE TO ENTER</div>
+  <small>Some doors only open when you choose to step through.</small>
 </div>
 
 <canvas id="c"></canvas>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 <script>
-/* RENDERER */
-const renderer=new THREE.WebGLRenderer({canvas:c,antialias:true});
-renderer.setSize(innerWidth,innerHeight);
+/* ================= BASIC SETUP ================= */
+const canvas = document.getElementById("c");
+const overlay = document.getElementById("overlay");
+const statusEl = document.getElementById("status");
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x050505,1);
 
-/* SCENE */
-const scene=new THREE.Scene();
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050505, 0.08);
 
-/* CAMERA */
-const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,50);
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 50);
 camera.position.set(0,1.65,5);
 scene.add(camera);
 
-/* FOG */
-scene.fog=new THREE.FogExp2(0x050505,0.08);
+/* ================= LIGHTING ================= */
+scene.add(new THREE.AmbientLight(0x222222,0.4));
 
-/* LIGHTING */
-const ambient=new THREE.AmbientLight(0x222222,0.4);
-scene.add(ambient);
-
-const flickerLight=new THREE.PointLight(0xfff2cc,1.4,18);
+const flickerLight = new THREE.PointLight(0xfff2cc,1.4,18);
 flickerLight.position.set(0,3,2);
 scene.add(flickerLight);
 
-/* ENVIRONMENT */
-const wallMat=new THREE.MeshStandardMaterial({
- color:0x1c1c1c, roughness:0.95, metalness:0.05
+/* ================= ENVIRONMENT ================= */
+const wallMat = new THREE.MeshStandardMaterial({
+  color:0x1c1c1c, roughness:0.95, metalness:0.05
 });
 
-const hallway=new THREE.Mesh(
- new THREE.BoxGeometry(4,4,12),
- wallMat
+const hallway = new THREE.Mesh(
+  new THREE.BoxGeometry(4,4,12),
+  wallMat
 );
-hallway.position.z=-4;
+hallway.position.z = -4;
 scene.add(hallway);
 
-/* FLOOR */
-const floor=new THREE.Mesh(
- new THREE.PlaneGeometry(4,12),
- new THREE.MeshStandardMaterial({color:0x151515,roughness:0.85})
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(4,12),
+  new THREE.MeshStandardMaterial({ color:0x151515, roughness:0.85 })
 );
-floor.rotation.x=-Math.PI/2;
+floor.rotation.x = -Math.PI/2;
 floor.position.set(0,0,-4);
 scene.add(floor);
 
-/* HANDS */
-const hand=new THREE.Mesh(
- new THREE.BoxGeometry(0.2,0.3,0.5),
- new THREE.MeshStandardMaterial({color:0x7a5a4a,roughness:0.8})
+/* ================= HAND + FLASHLIGHT ================= */
+const hand = new THREE.Mesh(
+  new THREE.BoxGeometry(0.2,0.3,0.5),
+  new THREE.MeshStandardMaterial({ color:0x7a5a4a, roughness:0.8 })
 );
 hand.position.set(0.4,-0.4,-1);
 camera.add(hand);
 
-/* FLASHLIGHT */
-const beam=new THREE.SpotLight(0xffffff,2,10,0.6,0.7);
-beam.position.set(0.4,-0.4,-1);
+const beam = new THREE.SpotLight(0xffffff,2,10,0.6,0.7);
+beam.position.copy(hand.position);
 beam.target.position.set(0,0,-5);
 camera.add(beam);
 camera.add(beam.target);
 
-/* AI IMPOSTOR */
-const impostor=new THREE.Mesh(
- new THREE.CapsuleGeometry(0.35,1.4,6,12),
- new THREE.MeshStandardMaterial({color:0x333333})
+/* ================= IMPOSTOR ================= */
+const impostor = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.35,1.4,6,12),
+  new THREE.MeshStandardMaterial({ color:0x333333 })
 );
 impostor.position.set(0,0,-6);
 scene.add(impostor);
 
-/* BLOOD DRIP */
-const drops=[];
-for(let i=0;i<20;i++){
- const d=new THREE.Mesh(
-  new THREE.SphereGeometry(0.03,8,8),
-  new THREE.MeshStandardMaterial({color:0x770000})
- );
- d.position.set((Math.random()-0.5)*1.6,3+Math.random(),-4);
- d.userData.spd=0.003+Math.random()*0.005;
- drops.push(d);scene.add(d);
+/* ================= STATE ================= */
+let started = false;
+let t = 0;
+
+/* ================= ENTER GAME ================= */
+function enterGame(){
+  if(started) return;
+  started = true;
+
+  overlay.classList.add("hidden");
+  statusEl.textContent = "Connected";
+
+  if(document.documentElement.requestFullscreen){
+    document.documentElement.requestFullscreen();
+  }
+
+  canvas.requestPointerLock?.();
 }
 
-/* STATE */
-let danger=0;
-let t=0;
+window.addEventListener("keydown",e=>{
+  if(e.code === "Space") enterGame();
+});
 
+/* ================= ANIMATION LOOP ================= */
 function animate(){
- requestAnimationFrame(animate);
- t+=0.01;
+  requestAnimationFrame(animate);
 
- /* light flicker */
- flickerLight.intensity=1.2+Math.sin(t*8)*0.3;
+  if(!started){
+    renderer.render(scene,camera);
+    return;
+  }
 
- /* dust illusion */
- scene.fog.density=0.07+Math.sin(t*2)*0.01;
+  t += 0.01;
 
- /* hand breathing */
- hand.position.y=-0.4+Math.sin(t*1.5)*0.02;
+  flickerLight.intensity = 1.2 + Math.sin(t*8)*0.3;
+  scene.fog.density = 0.07 + Math.sin(t*2)*0.01;
 
- /* impostor uncanny motion */
- impostor.position.x=Math.sin(t*0.4)*0.4;
- impostor.rotation.y=Math.sin(t*0.2)*0.3;
+  hand.position.y = -0.4 + Math.sin(t*1.5)*0.02;
 
- /* blood */
- drops.forEach(d=>{
-  d.position.y-=d.userData.spd;
-  if(d.position.y<0.05)d.position.y=3;
- });
+  impostor.position.x = Math.sin(t*0.4)*0.4;
+  impostor.rotation.y = Math.sin(t*0.2)*0.3;
 
- renderer.render(scene,camera);
+  renderer.render(scene,camera);
 }
 animate();
 
+/* ================= RESIZE ================= */
 addEventListener("resize",()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
 });
 </script>
 </body>
