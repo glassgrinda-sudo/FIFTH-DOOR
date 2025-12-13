@@ -5,7 +5,7 @@
 <title>FIFTH DOOR</title>
 
 <style>
-html,body {
+html,body{
   margin:0;
   width:100%;
   height:100%;
@@ -13,11 +13,11 @@ html,body {
   background:#000;
   font-family:Arial,sans-serif;
 }
-canvas { display:block; width:100%; height:100%; }
+canvas{display:block;width:100%;height:100%;}
 
-#ui {
+#ui{
   position:absolute;
-  top:20px; left:20px;
+  top:20px;left:20px;
   color:#ccc;
   background:rgba(0,0,0,0.6);
   padding:10px 14px;
@@ -25,7 +25,7 @@ canvas { display:block; width:100%; height:100%; }
   z-index:10;
 }
 
-#overlay {
+#overlay{
   position:fixed;
   inset:0;
   background:#000;
@@ -36,23 +36,23 @@ canvas { display:block; width:100%; height:100%; }
   color:#aaa;
   font-size:20px;
   z-index:20;
-  transition:opacity 1s ease;
+  cursor:pointer;
 }
-#overlay.fade { opacity:0; pointer-events:none; }
-#overlay small { margin-top:10px; font-size:14px; opacity:0.6; }
+#overlay.fade{opacity:0;pointer-events:none;}
+#overlay small{margin-top:10px;font-size:14px;opacity:.6;}
 </style>
 </head>
 
 <body>
 
 <div id="ui">
-  <b>FIFTH DOOR</b><br>
-  <span id="status">Waiting…</span>
+<b>FIFTH DOOR</b><br>
+<span id="status">Waiting…</span>
 </div>
 
-<div id="overlay">
-  <div>PRESS SPACE TO ENTER</div>
-  <small>You only cross once.</small>
+<div id="overlay" tabindex="0">
+<div>CLICK OR PRESS SPACE</div>
+<small>You only cross once.</small>
 </div>
 
 <canvas id="c"></canvas>
@@ -67,173 +67,67 @@ const overlay = document.getElementById("overlay");
 const statusEl = document.getElementById("status");
 
 /* ================= RENDERER ================= */
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
-renderer.setSize(innerWidth, innerHeight);
+const renderer = new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setSize(innerWidth,innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setClearColor(0x040404, 1);
+renderer.setClearColor(0x040404,1);
 
 /* ================= SCENE ================= */
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x040404, 0.07);
+scene.fog = new THREE.FogExp2(0x040404,0.07);
 
 /* ================= CAMERA ================= */
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 50);
+const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,50);
 camera.position.set(0,1.6,8);
 scene.add(camera);
 
 /* ================= LIGHT ================= */
-scene.add(new THREE.AmbientLight(0x222222,0.3));
+scene.add(new THREE.AmbientLight(0x222222,.3));
 
-const flashlight = new THREE.SpotLight(0xffffff, 2, 15, Math.PI/6, 0.4, 1.2);
-flashlight.position.set(0,1.6,8);
-flashlight.target.position.set(0,1.6,0);
-scene.add(flashlight);
-scene.add(flashlight.target);
+const flashlight = new THREE.SpotLight(0xffffff,2,15,Math.PI/6,.4,1.2);
 camera.add(flashlight);
 camera.add(flashlight.target);
 
 /* ================= ENV ================= */
-const wallMat = new THREE.MeshStandardMaterial({ color:0x1b1b1b, roughness:0.95 });
+const wallMat = new THREE.MeshStandardMaterial({color:0x1b1b1b,roughness:.95});
 
 function plane(w,h,x,y,z,ry=0){
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), wallMat);
-  m.position.set(x,y,z);
-  m.rotation.y = ry;
-  scene.add(m);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),wallMat);
+  m.position.set(x,y,z);m.rotation.y=ry;scene.add(m);
 }
-plane(12,4,-2,2,-2, Math.PI/2);
+plane(12,4,-2,2,-2,Math.PI/2);
 plane(12,4, 2,2,-2,-Math.PI/2);
 plane(4,4,0,2,-8);
 
-const floor = new THREE.Mesh(
+const floor=new THREE.Mesh(
   new THREE.PlaneGeometry(4,12),
-  new THREE.MeshStandardMaterial({ color:0x141414, roughness:0.9 })
+  new THREE.MeshStandardMaterial({color:0x141414,roughness:.9})
 );
-floor.rotation.x = -Math.PI/2;
+floor.rotation.x=-Math.PI/2;
 floor.position.set(0,0,-2);
 scene.add(floor);
 
-const door = new THREE.Mesh(
-  new THREE.BoxGeometry(2,3.5,0.25),
-  new THREE.MeshStandardMaterial({ color:0x4a0e0e, roughness:0.6 })
+const door=new THREE.Mesh(
+  new THREE.BoxGeometry(2,3.5,.25),
+  new THREE.MeshStandardMaterial({color:0x4a0e0e,roughness:.6})
 );
 door.position.set(0,1.75,-6);
 scene.add(door);
 
 /* ================= HANDS ================= */
 let handMixer;
-const loader = new THREE.GLTFLoader();
-loader.load("hands.glb", gltf=>{
-  const hands = gltf.scene;
-  hands.scale.set(1,1,1);
-  hands.position.set(0.4,-0.6,-1);
-  camera.add(hands);
-
-  handMixer = new THREE.AnimationMixer(hands);
-  gltf.animations.forEach(a=>handMixer.clipAction(a).play());
+new THREE.GLTFLoader().load("hands.glb",g=>{
+  const h=g.scene;
+  h.position.set(.4,-.6,-1);
+  camera.add(h);
+  handMixer=new THREE.AnimationMixer(h);
+  g.animations.forEach(a=>handMixer.clipAction(a).play());
 });
 
-/* ================= AUDIO (FIXED) ================= */
-const listener = new THREE.AudioListener();
+/* ================= AUDIO ================= */
+const listener=new THREE.AudioListener();
 camera.add(listener);
+const audioCtx=listener.context;
 
-const audioCtx = listener.context;
-
-const lobbyAmb = new THREE.Audio(listener);
-const gameAmb  = new THREE.Audio(listener);
-const enterSnd = new THREE.Audio(listener);
-const dragSnd  = new THREE.Audio(listener);
-
-const audioLoader = new THREE.AudioLoader();
-
-audioLoader.load("lobby.mp3", b=>{
-  lobbyAmb.setBuffer(b);
-  lobbyAmb.setLoop(true);
-  lobbyAmb.setVolume(0.4);
-});
-audioLoader.load("game.mp3", b=>{
-  gameAmb.setBuffer(b);
-  gameAmb.setLoop(true);
-  gameAmb.setVolume(0.5);
-});
-audioLoader.load("enter.mp3", b=>{
-  enterSnd.setBuffer(b);
-  enterSnd.setVolume(0.8);
-});
-audioLoader.load("drag.mp3", b=>{
-  dragSnd.setBuffer(b);
-  dragSnd.setVolume(1);
-});
-
-/* ================= STATE ================= */
-let started=false;
-let enterTime=0;
-let dragged=false;
-let blackout=0;
-
-/* ================= ENTER ================= */
-async function enterGame(){
-  if(started) return;
-  started=true;
-
-  await audioCtx.resume(); // 🔑 audio unlock
-
-  statusEl.textContent="Connected";
-  overlay.classList.add("fade");
-  enterTime=performance.now();
-
-  lobbyAmb.play();
-  enterSnd.play();
-  setTimeout(()=>{
-    lobbyAmb.stop();
-    gameAmb.play();
-  },1200);
-}
-
-/* ================= INPUT ================= */
-addEventListener("keydown",e=>{
-  if(e.code==="Space") enterGame();
-});
-
-/* ================= LOOP ================= */
-const clock = new THREE.Clock();
-
-function animate(){
-  requestAnimationFrame(animate);
-  const dt = clock.getDelta();
-
-  if(handMixer) handMixer.update(dt);
-
-  if(started){
-    const t=(performance.now()-enterTime)/1000;
-    camera.position.z = THREE.MathUtils.lerp(8,3,Math.min(t/2,1));
-
-    if(!dragged && camera.position.z<4){
-      dragged=true;
-      blackout=performance.now();
-      flashlight.intensity=0;
-      dragSnd.play();
-    }
-
-    if(dragged){
-      camera.position.x += Math.sin(t*40)*0.15;
-      if(performance.now()-blackout>500){
-        flashlight.intensity=2;
-      }
-    }
-  }
-
-  renderer.render(scene,camera);
-}
-animate();
-
-/* ================= RESIZE ================= */
-addEventListener("resize",()=>{
-  camera.aspect=innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
-});
-</script>
-
-</body>
-</html>
+const lobby=new THREE.Audio(listener);
+const game=new THRE
