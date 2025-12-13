@@ -51,4 +51,110 @@ renderer.setClearColor(0x050505, 1);
 
 /* ================= SCENE & CAMERA ================= */
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0, 1.6, 6);
+scene.add(camera);
+
+/* ================= LIGHTING ================= */
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const keyLight = new THREE.PointLight(0xffffff, 1.2, 30);
+keyLight.position.set(0, 3, 4);
+scene.add(keyLight);
+
+/* ================= HALLWAY ================= */
+const hallway = new THREE.Mesh(
+  new THREE.BoxGeometry(4,4,10),
+  new THREE.MeshStandardMaterial({ color:0x222222, side:THREE.BackSide })
+);
+hallway.position.z = 2;
+scene.add(hallway);
+
+/* ================= DOOR ================= */
+const doorGroup = new THREE.Group();
+scene.add(doorGroup);
+
+const door = new THREE.Mesh(
+  new THREE.BoxGeometry(2,3.5,0.25),
+  new THREE.MeshStandardMaterial({ color:0x550000 })
+);
+door.position.y = 1.75;
+door.position.z = -1;
+doorGroup.add(door);
+
+/* ================= BLOOD DRIPS ================= */
+const bloodDrops = [];
+const bloodMat = new THREE.MeshStandardMaterial({ color:0x880000 });
+
+for(let i=0;i<25;i++){
+  const d = new THREE.Mesh(
+    new THREE.SphereGeometry(0.035,8,8),
+    bloodMat
+  );
+  d.position.set(
+    (Math.random()-0.5)*1.6,
+    3.6 + Math.random(),
+    -0.85
+  );
+  d.userData.speed = 0.004 + Math.random()*0.008;
+  bloodDrops.push(d);
+  scene.add(d);
+}
+
+/* ================= BLOOD POOL ================= */
+const bloodPool = new THREE.Mesh(
+  new THREE.CircleGeometry(0.15,32),
+  new THREE.MeshStandardMaterial({ color:0x660000 })
+);
+bloodPool.rotation.x = -Math.PI/2;
+bloodPool.position.set(0,0.02,0.5);
+scene.add(bloodPool);
+
+/* ================= NETWORK (GATE) ================= */
+const statusEl = document.getElementById("status");
+let doorOpening = false;
+
+const socket = new WebSocket("wss://fifth-door-server.onrender.com");
+socket.onopen = () => statusEl.textContent = "The door is sealed…";
+socket.onmessage = e => {
+  const data = JSON.parse(e.data);
+  if(data.type === "init"){
+    statusEl.textContent = "Enter.";
+    doorOpening = true;
+  }
+};
+
+/* ================= ANIMATION ================= */
+let doorAngle = 0;
+
+function animate(){
+  requestAnimationFrame(animate);
+
+  // blood drips
+  bloodDrops.forEach(d=>{
+    d.position.y -= d.userData.speed;
+    if(d.position.y < 0.05) d.position.y = 3.6;
+  });
+
+  // pool grows
+  bloodPool.scale.x += 0.0006;
+  bloodPool.scale.y += 0.0006;
+
+  // door opens
+  if(doorOpening && doorAngle > -Math.PI/2){
+    doorAngle -= 0.01;
+    doorGroup.rotation.y = doorAngle;
+  }
+
+  renderer.render(scene,camera);
+}
+animate();
+
+/* ================= RESIZE ================= */
+addEventListener("resize",()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight, false);
+});
+</script>
+</body>
+</html>
