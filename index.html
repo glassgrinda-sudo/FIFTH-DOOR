@@ -1,194 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FIFTH DOOR</title>
+
+<style>
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: Arial, sans-serif;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#ui {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  color: #ccc;
+  background: rgba(0,0,0,0.6);
+  padding: 10px 14px;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: #aaa;
+  font-size: 20px;
+  z-index: 20;
+  transition: opacity 1s ease;
+}
+
+#overlay.fade {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#overlay small {
+  margin-top: 10px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+  <b>FIFTH DOOR</b><br>
+  <span id="status">Waiting…</span>
+</div>
+
+<div id="overlay">
+  <div>PRESS SPACE TO ENTER</div>
+  <small>Some doors only open when you choose.</small>
+</div>
+
+<canvas id="c"></canvas>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 <script>
-/* ================= CORE ================= */
-const canvas = document.getElementById("c");
-const overlay = document.getElementById("overlay");
+/* ================= SETUP ================= */
+const canvas   = document.getElementById("c");
+const overlay  = document.getElementById("overlay");
 const statusEl = document.getElementById("status");
 
-/* ================= RENDERER ================= */
 const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias:true,
-  powerPreference:"high-performance"
+  canvas: canvas,
+  antialias: true
 });
-renderer.setPixelRatio(devicePixelRatio);
-renderer.setSize(innerWidth,innerHeight);
-renderer.setClearColor(0x040404,1);
-renderer.physicallyCorrectLights = true;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x050505, 1);
 
 /* ================= SCENE ================= */
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x050505, 4, 22);
+scene.fog = new THREE.Fog(0x050505, 3, 20);
 
 /* ================= CAMERA ================= */
-const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,60);
-camera.position.set(0,1.7,9);
+const camera = new THREE.PerspectiveCamera(
+  70,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  50
+);
+camera.position.set(0, 1.6, 8);
 scene.add(camera);
 
 /* ================= LIGHTING ================= */
-// Ambient fill
-scene.add(new THREE.AmbientLight(0x1a1a1a,0.25));
+scene.add(new THREE.AmbientLight(0x222222, 0.5));
 
-// Overhead practical
-const ceilingLight = new THREE.PointLight(0xfff0d8, 18, 18, 2);
-ceilingLight.position.set(0,3.4,-1);
-ceilingLight.castShadow = true;
-scene.add(ceilingLight);
+const light = new THREE.PointLight(0xfff2cc, 1, 20);
+light.position.set(0, 3, 2);
+scene.add(light);
 
-// Door accent
-const doorLight = new THREE.SpotLight(0xffd2aa, 35, 30, Math.PI/7, 0.5);
-doorLight.position.set(0,3,-3);
-doorLight.target.position.set(0,1.6,-6);
-doorLight.castShadow = true;
-scene.add(doorLight);
-scene.add(doorLight.target);
-
-/* ================= MATERIALS ================= */
+/* ================= HALLWAY (PLANES) ================= */
 const wallMat = new THREE.MeshStandardMaterial({
-  color:0x202020,
-  roughness:0.92,
-  metalness:0.05
+  color: 0x1c1c1c,
+  roughness: 0.95
 });
 
-const floorMat = new THREE.MeshStandardMaterial({
-  color:0x141414,
-  roughness:0.85,
-  metalness:0.02
-});
-
-const doorMat = new THREE.MeshStandardMaterial({
-  color:0x5a1414,
-  roughness:0.65,
-  metalness:0.15
-});
-
-/* ================= HALLWAY ================= */
-const hallway = new THREE.Mesh(
-  new THREE.BoxGeometry(4.2,4,14),
+const leftWall = new THREE.Mesh(
+  new THREE.PlaneGeometry(12, 4),
   wallMat
 );
-hallway.position.z = -3;
-hallway.receiveShadow = true;
-scene.add(hallway);
+leftWall.position.set(-2, 2, -2);
+leftWall.rotation.y = Math.PI / 2;
+scene.add(leftWall);
+
+const rightWall = leftWall.clone();
+rightWall.position.x = 2;
+rightWall.rotation.y = -Math.PI / 2;
+scene.add(rightWall);
+
+const backWall = new THREE.Mesh(
+  new THREE.PlaneGeometry(4, 4),
+  wallMat
+);
+backWall.position.set(0, 2, -8);
+scene.add(backWall);
 
 /* ================= FLOOR ================= */
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(4.2,14),
-  floorMat
+  new THREE.PlaneGeometry(4, 12),
+  new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9 })
 );
-floor.rotation.x = -Math.PI/2;
-floor.position.set(0,0,-3);
-floor.receiveShadow = true;
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(0, 0, -2);
 scene.add(floor);
 
 /* ================= DOOR ================= */
 const door = new THREE.Mesh(
-  new THREE.BoxGeometry(2,3.6,0.3),
-  doorMat
+  new THREE.BoxGeometry(2, 3.5, 0.25),
+  new THREE.MeshStandardMaterial({ color: 0x4a0e0e, roughness: 0.7 })
 );
-door.position.set(0,1.8,-7);
-door.castShadow = true;
+door.position.set(0, 1.75, -6);
 scene.add(door);
 
 /* ================= HAND ================= */
 const hand = new THREE.Mesh(
-  new THREE.BoxGeometry(.18,.28,.45),
-  new THREE.MeshStandardMaterial({
-    color:0x8a6a55,
-    roughness:0.55,
-    metalness:0.05
-  })
+  new THREE.BoxGeometry(0.2, 0.3, 0.5),
+  new THREE.MeshStandardMaterial({ color: 0x7a5a4a })
 );
-hand.position.set(.42,-.42,-1);
-hand.castShadow = true;
+hand.position.set(0.4, -0.4, -1);
 camera.add(hand);
 
 /* ================= STATE ================= */
-let started=false;
-let enterTime=0;
-let dragged=false;
-let blackout=0;
+let started = false;
+let enterTime = 0;
 
 /* ================= ENTER ================= */
-function enterGame(){
-  if(started) return;
-  started=true;
-
-  statusEl.textContent="Connected";
+function enterGame() {
+  if (started) return;
+  started = true;
+  statusEl.textContent = "Connected";
   overlay.classList.add("fade");
-
-  document.documentElement.requestFullscreen?.();
-  canvas.requestPointerLock?.();
-
-  enterTime=performance.now();
+  enterTime = performance.now();
 }
 
-/* ================= DRAG SEQUENCE ================= */
-function triggerDrag(){
-  if(dragged) return;
-  dragged=true;
-  blackout=performance.now();
-}
-
-/* ================= INPUT ================= */
-addEventListener("keydown",e=>{
-  if(e.code==="Space") enterGame();
+window.addEventListener("keydown", e => {
+  if (e.code === "Space") enterGame();
 });
 
 /* ================= LOOP ================= */
-function animate(){
+function animate() {
   requestAnimationFrame(animate);
-  const now = performance.now()/1000;
 
-  if(started){
-    const t=(performance.now()-enterTime)/1000;
-
-    // Forward push
-    camera.position.z = THREE.MathUtils.lerp(9,4,Math.min(t/2,1));
-
-    // Subtle head weight
-    camera.position.y = 1.7 + Math.sin(now*0.6)*0.015;
-
-    // Hand breath
-    hand.position.y = -0.42 + Math.sin(now*1.8)*0.025;
-
-    // Trigger DRAG near door
-    if(camera.position.z < 5 && !dragged){
-      setTimeout(triggerDrag, 800);
-    }
+  if (started) {
+    const t = (performance.now() - enterTime) / 1000;
+    camera.position.z = THREE.MathUtils.lerp(8, 3, Math.min(t / 2, 1));
+    hand.position.y = -0.4 + Math.sin(t * 1.5) * 0.02;
   }
 
-  // DRAG EFFECT
-  if(dragged){
-    const d = (performance.now()-blackout)/1000;
-
-    // Camera violent yank
-    camera.rotation.z = Math.sin(d*40)*0.04;
-    camera.position.x = Math.sin(d*12)*0.25;
-
-    // Light collapse
-    ceilingLight.intensity = THREE.MathUtils.lerp(18,0,Math.min(d/0.4,1));
-    doorLight.intensity = THREE.MathUtils.lerp(35,0,Math.min(d/0.4,1));
-
-    // Blackout
-    if(d > 0.35){
-      renderer.setClearColor(0x000000,1);
-    }
-  }
-
-  renderer.render(scene,camera);
+  renderer.render(scene, camera);
 }
 animate();
 
 /* ================= RESIZE ================= */
-addEventListener("resize",()=>{
-  camera.aspect=innerWidth/innerHeight;
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
+
+</body>
+</html>
