@@ -1,167 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>FIFTH DOOR – Phase One Expanded</title>
-  <style>
-    html, body { margin:0; padding:0; overflow:hidden; background:#000; color:#ddd; font-family:Arial, sans-serif; }
-    #ui {
-      position:absolute; top:10px; left:10px; z-index:10;
-      background:rgba(0,0,0,0.6); padding:10px; border-radius:8px; width:260px;
-    }
-    #players { font-size:12px; margin-top:6px; }
-    .mic { color:#0f0; }
-    #log { font-size:11px; max-height:120px; overflow:auto; margin-top:6px; }
-    canvas { display:block; }
-  </style>
+<meta charset="UTF-8" />
+<title>FIFTH DOOR – Phase One & Two Prototype</title>
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#000;color:#ddd;font-family:Arial}
+#ui{position:absolute;top:10px;left:10px;z-index:10;background:rgba(0,0,0,0.65);padding:10px;border-radius:8px;width:260px}
+#players{font-size:12px;margin-top:6px}
+#log{font-size:11px;max-height:120px;overflow:auto;margin-top:6px}
+canvas{display:block}
+</style>
 </head>
 <body>
 <div id="ui">
-  <div><strong>FIFTH DOOR</strong></div>
-  <div>Status: <span id="status">Lobby</span></div>
-  <div id="players"></div>
-  <div id="log"></div>
+<strong>FIFTH DOOR</strong><br>
+Phase: <span id="phase">Lobby</span><br>
+<div id="players"></div>
+<div id="log"></div>
 </div>
 <canvas id="c"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
 <script>
-  // === FORCE GAME START (Phase Two Bridge) ===
-setTimeout(() => {
-  document.getElementById("status").textContent = "In Game";
-  log("The door locks behind you. The game has begun.");
-}, 4000);
+/*********************
+ PHASE FLAGS
+*********************/
+let PHASE = "LOBBY"; // LOBBY → GAME
 
-// =====================
-// BASIC SETUP
-// =====================
+/*********************
+ BASIC THREE SETUP
+*********************/
 const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas });
-renderer.setSize(window.innerWidth, window.innerHeight);
+const renderer = new THREE.WebGLRenderer({canvas});
+renderer.setSize(innerWidth,innerHeight);
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 4, 28);
+scene.fog = new THREE.Fog(0x000000,5,30);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
-camera.position.set(0, 1.6, 6);
-
-const light = new THREE.PointLight(0xffffff, 1, 20);
-light.position.set(0, 4, 0);
-scene.add(light);
-
-// =====================
-// PLAYER HAND
-// =====================
-const hand = new THREE.Mesh(
-  new THREE.BoxGeometry(0.2,0.1,0.4),
-  new THREE.MeshStandardMaterial({ color:0x777777 })
-);
-hand.position.set(0.35,-0.35,-0.7);
-camera.add(hand);
+const camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,100);
+camera.position.set(0,1.6,6);
 scene.add(camera);
 
-// =====================
-// ROOM
-// =====================
-scene.add(new THREE.Mesh(
-  new THREE.BoxGeometry(12,6,12),
-  new THREE.MeshStandardMaterial({ color:0x1a1a1a, side:THREE.BackSide })
-));
+const light = new THREE.PointLight(0xffffff,1,25);
+light.position.set(0,4,0);
+scene.add(light);
 
-// =====================
-// LOBBY FAKE PLAYERS
-// =====================
-const fakeNames = ["Alex","Jordan","Chris","Morgan","Riley","Sam","Drew"];
-let lobbyPlayers = fakeNames.slice(0,5).map(n=>({name:n, ai:true, mic:false}));
+/*********************
+ PLAYER HAND
+*********************/
+const hand = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.1,0.4),new THREE.MeshStandardMaterial({color:0x777777}));
+hand.position.set(0.35,-0.35,-0.7);
+camera.add(hand);
 
-const playersEl = document.getElementById('players');
-function renderPlayers(){
-  playersEl.innerHTML = '<strong>Lobby</strong><br>' + lobbyPlayers.map(p=>`${p.name} ${p.mic?'🎤':''}`).join('<br>');
+/*********************
+ ROOM
+*********************/
+scene.add(new THREE.Mesh(new THREE.BoxGeometry(14,6,14),new THREE.MeshStandardMaterial({color:0x1a1a1a,side:THREE.BackSide})));
+
+/*********************
+ AUDIO (CREEPY MUSIC)
+*********************/
+const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+let musicOsc;
+function startMusic(){
+  if(musicOsc) return;
+  musicOsc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  musicOsc.type = 'sine';
+  musicOsc.frequency.value = 110;
+  gain.gain.value = 0.03; // quiet
+  musicOsc.connect(gain).connect(audioCtx.destination);
+  musicOsc.start();
 }
-renderPlayers();
+
+function playScare(){
+  const o = audioCtx.createOscillator();
+  o.frequency.value = 55;
+  o.type='sawtooth';
+  o.connect(audioCtx.destination);
+  o.start();setTimeout(()=>o.stop(),1200);
+}
+
+/*********************
+ LOBBY FAKE PLAYERS
+*********************/
+const fakeNames=["Alex","Jordan","Chris","Morgan","Riley","Sam","Drew"];
+let lobbyPlayers=fakeNames.slice(0,5).map(n=>({name:n,mic:false}));
+const playersEl=document.getElementById('players');
+const logEl=document.getElementById('log');
+function log(t){logEl.innerHTML+=t+"<br>";logEl.scrollTop=9999}
+
+function renderLobby(){
+  playersEl.innerHTML='<strong>Lobby</strong><br>'+lobbyPlayers.map(p=>`${p.name} ${p.mic?'🎤':''}`).join('<br>');
+}
+renderLobby();
 
 setInterval(()=>{
-  lobbyPlayers.forEach(p=>p.mic = Math.random()<0.2);
-  renderPlayers();
-},800);
+  lobbyPlayers.forEach(p=>p.mic=Math.random()<0.25);
+  renderLobby();
+},900);
 
-// =====================
-// UI LOG
-// =====================
-const logEl = document.getElementById('log');
-function log(msg){ logEl.innerHTML += msg+"<br>"; logEl.scrollTop = logEl.scrollHeight; }
-log('Waiting for players...');
+log("You joined the lobby.");
 
-// =====================
-// AUDIO SYSTEM
-// =====================
-const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-function playWhisper(){
-  const osc = audioCtx.createOscillator();
-  osc.frequency.value = 300 + Math.random()*200;
-  osc.type = 'triangle';
-  osc.connect(audioCtx.destination);
-  osc.start(); setTimeout(()=>osc.stop(),300);
-}
-function playEnemyCue(){
-  const osc = audioCtx.createOscillator();
-  osc.frequency.value = 55;
-  osc.type = 'sawtooth';
-  osc.connect(audioCtx.destination);
-  osc.start(); setTimeout(()=>osc.stop(),1500);
-}
+/*********************
+ FORCE GAME START (FIX)
+*********************/
+setTimeout(()=>{
+  PHASE="GAME";
+  document.getElementById('phase').textContent="In Game";
+  log("The door locks. You are not alone.");
+  startMusic();
+},4000);
 
-// =====================
-// AI IMPOSTOR PLAYER
-// =====================
-const impostor = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.3,1.0,4,8),
-  new THREE.MeshStandardMaterial({ color:0x3a3a3a })
-);
+/*********************
+ AI IMPOSTOR
+*********************/
+const impostor=new THREE.Mesh(new THREE.CapsuleGeometry(0.3,1,4,8),new THREE.MeshStandardMaterial({color:0x3a3a3a}));
 impostor.position.set(2,1,0);
 scene.add(impostor);
+let aiTime=0,grabbed=false;
 
-let aiTimer=0, grabbed=false, enemyActive=false;
-
-// =====================
-// ENEMY ENTITY
-// =====================
-const enemy = new THREE.Mesh(
-  new THREE.SphereGeometry(0.6,16,16),
-  new THREE.MeshStandardMaterial({ color:0x550000 })
-);
+/*********************
+ ENEMY
+*********************/
+const enemy=new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16),new THREE.MeshStandardMaterial({color:0x550000}));
 enemy.visible=false;
 scene.add(enemy);
 
-// =====================
-// GAME LOOP
-// =====================
+/*********************
+ GAME LOOP
+*********************/
 function animate(){
   requestAnimationFrame(animate);
 
-  aiTimer+=0.01;
-  impostor.position.x=Math.sin(aiTimer)*3;
-  impostor.position.z=Math.cos(aiTimer)*3;
+  if(PHASE==="GAME"){
+    aiTime+=0.01;
+    impostor.position.x=Math.sin(aiTime)*3;
+    impostor.position.z=Math.cos(aiTime)*3;
 
-  if(Math.random()<0.002) playWhisper();
+    const d=impostor.position.distanceTo(camera.position);
+    if(d<1.3 && !grabbed){
+      grabbed=true;
+      log("Someone grabs you and drags you away.");
+      playScare();
+      setTimeout(()=>{
+        enemy.visible=true;
+        enemy.position.copy(impostor.position);
+        log("The monster knows where you are.");
+      },1200);
+    }
 
-  const dist = impostor.position.distanceTo(camera.position);
-  if(dist<1.3 && !grabbed){
-    grabbed=true;
-    document.getElementById('status').textContent='Grabbed';
-    log('A player grabs you and drags you into darkness.');
-    playEnemyCue();
-    setTimeout(()=>{
-      document.getElementById('status').textContent='Hunted';
-      enemy.visible=true;
-      enemy.position.set(impostor.position.x,1,impostor.position.z);
-      enemyActive=true;
-      log('The monster has your location.');
-    },1800);
-  }
-
-  if(enemyActive){
-    enemy.position.lerp(camera.position,0.01);
-    light.intensity = 0.5 + Math.sin(aiTimer*5)*0.3;
+    if(enemy.visible){
+      enemy.position.lerp(camera.position,0.008);
+      light.intensity=0.6+Math.sin(aiTime*5)*0.25;
+    }
   }
 
   renderer.render(scene,camera);
