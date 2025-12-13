@@ -1,12 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>FIFTH DOOR – Playable Multiplayer</title>
+<meta charset="UTF-8">
+<title>FIFTH DOOR – Multiplayer Prototype</title>
 <style>
-html,body{margin:0;padding:0;overflow:hidden;background:#000;color:#ddd;font-family:Arial}
-#ui{position:absolute;top:10px;left:10px;z-index:10;background:rgba(0,0,0,0.7);padding:10px;border-radius:8px;width:260px}
-#log{font-size:11px;max-height:140px;overflow:auto;margin-top:6px}
+html,body{
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#000;
+  color:#ddd;
+  font-family:Arial
+}
+#ui{
+  position:absolute;
+  top:10px;
+  left:10px;
+  z-index:10;
+  background:rgba(0,0,0,0.7);
+  padding:10px;
+  border-radius:8px;
+  width:260px
+}
+#log{
+  font-size:11px;
+  max-height:140px;
+  overflow:auto;
+  margin-top:6px
+}
 canvas{display:block}
 </style>
 </head>
@@ -22,128 +43,72 @@ Phase: <span id="phase">In Game</span>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
 <script>
-/*********************
- BASIC SETUP
-*********************/
-const SERVER_URL = "wss://fifth-door-server.onrender.com"; // keep this
+/* =====================
+   CONFIG
+===================== */
+const SERVER_URL = "wss://fifth-door-server.onrender.com";
 
+/* =====================
+   UI LOG
+===================== */
+const logEl = document.getElementById("log");
+function log(t){
+  logEl.innerHTML += t + "<br>";
+  logEl.scrollTop = 9999;
+}
+
+/* =====================
+   AUDIO UNLOCK + KEEP ALIVE
+===================== */
+let audioUnlocked = false;
+let ambient;
+
+window.addEventListener("click", () => {
+  if (audioUnlocked) return;
+
+  const ctx = THREE.AudioContext.getContext();
+  if (ctx.state === "suspended") ctx.resume();
+
+  const listener = new THREE.AudioListener();
+  camera.add(listener);
+
+  ambient = new THREE.Audio(listener);
+  const osc = listener.context.createOscillator();
+  osc.frequency.value = 30;
+  osc.start();
+  ambient.setNodeSource(osc);
+  ambient.setVolume(0.02);
+
+  audioUnlocked = true;
+  log("Audio unlocked");
+});
+
+/* =====================
+   NETWORK
+===================== */
 let socket, playerId;
 let players = {};
 
-const logEl = document.getElementById("log");
-function log(t){logEl.innerHTML+=t+"<br>";logEl.scrollTop=9999}
-
-/*********************
- AUDIO UNLOCK (REQUIRED)
-*********************/
-let audioUnlocked = false;
-window.addEventListener("click", () => {
-  if (!audioUnlocked) {
-    const ctx = THREE.AudioContext.getContext();
-    if (ctx.state === "suspended") ctx.resume();
-    audioUnlocked = true;
-    log("Audio unlocked");
-  }
-});
-
-/*********************
- CONNECT TO SERVER
-*********************/
 socket = new WebSocket(SERVER_URL);
 
-socket.onopen = () => {
-  log("Connected to server");
-};
+socket.onopen = () => log("Connected to server");
 
 socket.onmessage = e => {
   const data = JSON.parse(e.data);
-  if(data.type === "init"){
+
+  if (data.type === "init") {
     playerId = data.id;
     players = data.players;
     log("You joined the game");
   }
-  if(data.type === "players"){
+
+  if (data.type === "players") {
     players = data.players;
   }
 };
 
-/*********************
- THREE.JS SETUP
-*********************/
-const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({canvas});
-renderer.setSize(innerWidth, innerHeight);
+socket.onerror = () => log("WebSocket error");
 
-const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 5, 40);
-
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0, 1.6, 5);
-scene.add(camera);
-
-const light = new THREE.PointLight(0xffffff, 1, 30);
-light.position.set(0, 5, 0);
-scene.add(light);
-
-scene.add(new THREE.Mesh(
-  new THREE.BoxGeometry(30, 6, 30),
-  new THREE.MeshStandardMaterial({color:0x111111, side:THREE.BackSide})
-));
-
-/*********************
- INPUT & MOVEMENT
-*********************/
-const keys = {};
-addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-
-function updateMovement(){
-  const speed = 0.06;
-  if(keys["w"]) camera.position.z -= speed;
-  if(keys["s"]) camera.position.z += speed;
-  if(keys["a"]) camera.position.x -= speed;
-  if(keys["d"]) camera.position.x += speed;
-
-  if(socket.readyState === 1 && playerId){
-    socket.send(JSON.stringify({
-      type:"state",
-      state:{ x:camera.position.x, y:camera.position.y, z:camera.position.z }
-    }));
-  }
-}
-
-/*********************
- PLAYER MESHES
-*********************/
-const playerMeshes = {};
-function getPlayerMesh(id){
-  if(playerMeshes[id]) return playerMeshes[id];
-  const mesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.3,1,4,8),
-    new THREE.MeshStandardMaterial({ color: id===playerId ? 0xaaaaaa : 0x444444 })
-  );
-  scene.add(mesh);
-  playerMeshes[id] = mesh;
-  return mesh;
-}
-
-/*********************
- GAME LOOP
-*********************/
-function animate(){
-  requestAnimationFrame(animate);
-
-  updateMovement();
-
-  for(const id in players){
-    const p = players[id];
-    const mesh = getPlayerMesh(id);
-    mesh.position.set(p.x || 0, 1, p.z || 0);
-  }
-
-  renderer.render(scene, camera);
-}
-animate();
-</script>
-</body>
-</html>
+/* =====================
+   THREE.JS SETUP
+=====================
