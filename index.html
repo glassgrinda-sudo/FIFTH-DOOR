@@ -1,94 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>FIFTH DOOR</title>
+<title>Canvas Test</title>
 <style>
-html,body{
-  margin:0;
-  padding:0;
-  overflow:hidden;
-  background:#000;
-  color:#ddd;
-  font-family:Arial
-}
-#ui{
-  position:absolute;
-  top:10px;
-  left:10px;
-  z-index:10;
-  background:rgba(0,0,0,0.7);
-  padding:10px;
-  border-radius:8px;
-  width:260px
-}
+html,body{margin:0;padding:0;background:#000}
 canvas{display:block}
 </style>
 </head>
 <body>
 
-<div id="ui">
-<strong>FIFTH DOOR</strong><br>
-<span id="status">Connecting…</span>
-</div>
-
 <canvas id="c"></canvas>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
 <script>
-/* =====================
-   BASIC SETUP
-===================== */
-const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({ canvas });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setClearColor(0x000000, 1);
+const c = document.getElementById("c");
+c.width = window.innerWidth;
+c.height = window.innerHeight;
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0, 1.6, 6);
-scene.add(camera);
+const ctx = c.getContext("2d");
 
-/* =====================
-   LIGHT (FORCED VISIBILITY)
-===================== */
-scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+ctx.fillStyle = "red";
+ctx.fillRect(0, 0, c.width, c.height);
 
-const overhead = new THREE.PointLight(0xffffff, 1.5, 20);
-overhead.position.set(0, 3, 4);
-scene.add(overhead);
+ctx.fillStyle = "white";
+ctx.font = "48px Arial";
+ctx.fillText("CAN YOU SEE THIS?", 50, 100);
+</script>
 
-/* =====================
-   HALLWAY
-===================== */
-const hallway = new THREE.Mesh(
-  new THREE.BoxGeometry(4, 4, 10),
-  new THREE.MeshStandardMaterial({
-    color: 0x222222,
-    side: THREE.BackSide
-  })
-);
-hallway.position.z = 2;
-scene.add(hallway);
-
-/* =====================
-   DOOR
-===================== */
-const doorGroup = new THREE.Group();
-scene.add(doorGroup);
-
-const door = new THREE.Mesh(
-  new THREE.BoxGeometry(2, 3.5, 0.2),
-  new THREE.MeshStandardMaterial({ color: 0x440000 })
-);
-door.position.set(0, 1.75, -1);
-doorGroup.add(door);
-
-doorGroup.position.z = 1;
-doorGroup.position.y = 0;
-
-/* =====================
-   BLOOD DRIPS
-===================== */
-const bloodDrops = [];
-const bloodMaterial = new T
+</body>
+</html>
