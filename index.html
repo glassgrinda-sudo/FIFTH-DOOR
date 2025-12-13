@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>WebGL Proof</title>
+<title>FIFTH DOOR</title>
 <style>
 html,body{
   margin:0;
@@ -10,61 +10,45 @@ html,body{
   width:100%;
   height:100%;
   overflow:hidden;
+  background:#000;
+  font-family:Arial;
 }
-canvas{
-  display:block;
+#ui{
+  position:absolute;
+  top:20px;
+  left:20px;
+  z-index:10;
+  color:#ddd;
+  background:rgba(0,0,0,0.6);
+  padding:10px 14px;
+  border-radius:6px;
 }
+canvas{display:block}
 </style>
 </head>
 <body>
+
+<div id="ui">
+  <strong>FIFTH DOOR</strong><br>
+  <span id="status">Connecting…</span>
+</div>
 
 <canvas id="c"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
 <script>
+/* ================= SAFE RENDERER ================= */
 const canvas = document.getElementById("c");
-
 const renderer = new THREE.WebGLRenderer({
-  canvas: canvas,
-  antialias: true,
-  powerPreference: "high-performance",
-  preserveDrawingBuffer: true
+  canvas,
+  antialias:true,
+  powerPreference:"high-performance",
+  preserveDrawingBuffer:true
 });
-
 renderer.setPixelRatio(window.devicePixelRatio || 1);
 renderer.setSize(window.innerWidth, window.innerHeight, false);
-renderer.setClearColor(0x003366, 1);
+renderer.setClearColor(0x050505, 1);
 
-document.body.style.background = "#003366";
-
+/* ================= SCENE & CAMERA ================= */
 const scene = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(
-  70,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  100
-);
-camera.position.z = 3;
-
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(1,1,1);
-scene.add(light);
-
-const cube = new THREE.Mesh(
-  new THREE.BoxGeometry(1,1,1),
-  new THREE.MeshStandardMaterial({ color: 0xff0000 })
-);
-scene.add(cube);
-
-function animate(){
-  requestAnimationFrame(animate);
-  cube.rotation.x += 0.01;
-  cube.rotation.y += 0.015;
-  renderer.render(scene, camera);
-}
-animate();
-</script>
-
-</body>
-</html>
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight
