@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FIFTH DOOR – Multiplayer Prototype</title>
+<title>FIFTH DOOR</title>
 <style>
 html,body{
   margin:0;
@@ -22,10 +22,73 @@ html,body{
   border-radius:8px;
   width:260px
 }
-#log{
-  font-size:11px;
-  max-height:140px;
-  overflow:auto;
-  margin-top:6px
-}
-canvas{d
+canvas{display:block}
+</style>
+</head>
+<body>
+
+<div id="ui">
+<strong>FIFTH DOOR</strong><br>
+<span id="status">Connecting…</span>
+</div>
+
+<canvas id="c"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+<script>
+/* =====================
+   BASIC SETUP
+===================== */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x000000, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0, 1.6, 6);
+scene.add(camera);
+
+/* =====================
+   LIGHT (FORCED VISIBILITY)
+===================== */
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+const overhead = new THREE.PointLight(0xffffff, 1.5, 20);
+overhead.position.set(0, 3, 4);
+scene.add(overhead);
+
+/* =====================
+   HALLWAY
+===================== */
+const hallway = new THREE.Mesh(
+  new THREE.BoxGeometry(4, 4, 10),
+  new THREE.MeshStandardMaterial({
+    color: 0x222222,
+    side: THREE.BackSide
+  })
+);
+hallway.position.z = 2;
+scene.add(hallway);
+
+/* =====================
+   DOOR
+===================== */
+const doorGroup = new THREE.Group();
+scene.add(doorGroup);
+
+const door = new THREE.Mesh(
+  new THREE.BoxGeometry(2, 3.5, 0.2),
+  new THREE.MeshStandardMaterial({ color: 0x440000 })
+);
+door.position.set(0, 1.75, -1);
+doorGroup.add(door);
+
+doorGroup.position.z = 1;
+doorGroup.position.y = 0;
+
+/* =====================
+   BLOOD DRIPS
+===================== */
+const bloodDrops = [];
+const bloodMaterial = new T
