@@ -26,6 +26,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
 <script>
+  // === FORCE GAME START (Phase Two Bridge) ===
+setTimeout(() => {
+  document.getElementById("status").textContent = "In Game";
+  log("The door locks behind you. The game has begun.");
+}, 4000);
+
 // =====================
 // BASIC SETUP
 // =====================
