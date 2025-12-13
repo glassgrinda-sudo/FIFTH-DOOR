@@ -4,24 +4,11 @@
 <meta charset="UTF-8">
 <title>FIFTH DOOR</title>
 <style>
-html,body{
-  margin:0;
-  padding:0;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:#000;
-  font-family:Arial;
-}
+html,body{margin:0;height:100%;overflow:hidden;background:#000}
 #ui{
-  position:absolute;
-  top:20px;
-  left:20px;
-  z-index:10;
-  color:#ddd;
-  background:rgba(0,0,0,0.6);
-  padding:10px 14px;
-  border-radius:6px;
+ position:absolute;top:20px;left:20px;color:#ccc;
+ background:rgba(0,0,0,0.6);padding:12px;border-radius:6px;
+ font-family:Arial;z-index:10
 }
 canvas{display:block}
 </style>
@@ -29,140 +16,130 @@ canvas{display:block}
 <body>
 
 <div id="ui">
-  <strong>FIFTH DOOR</strong><br>
-  <span id="status">Connecting…</span>
+<b>FIFTH DOOR</b><br>
+<span id="status">Waiting…</span>
 </div>
 
 <canvas id="c"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
 <script>
-/* ================= SAFE RENDERER ================= */
-const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias:true,
-  powerPreference:"high-performance",
-  preserveDrawingBuffer:true
-});
-renderer.setPixelRatio(window.devicePixelRatio || 1);
-renderer.setSize(window.innerWidth, window.innerHeight, false);
-renderer.setClearColor(0x050505, 1);
+/* RENDERER */
+const renderer=new THREE.WebGLRenderer({canvas:c,antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setClearColor(0x050505,1);
 
-/* ================= SCENE & CAMERA ================= */
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0, 1.6, 5);
+/* SCENE */
+const scene=new THREE.Scene();
+
+/* CAMERA */
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,50);
+camera.position.set(0,1.65,5);
 scene.add(camera);
 
-/* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+/* FOG */
+scene.fog=new THREE.FogExp2(0x050505,0.08);
 
-const keyLight = new THREE.PointLight(0xffffff, 1.4, 40);
-keyLight.position.set(0, 3, 2);
-scene.add(keyLight);
+/* LIGHTING */
+const ambient=new THREE.AmbientLight(0x222222,0.4);
+scene.add(ambient);
 
-/* ================= HALLWAY (IN FRONT OF CAMERA) ================= */
-const hallway = new THREE.Mesh(
-  new THREE.BoxGeometry(4,4,10),
-  new THREE.MeshStandardMaterial({ color:0x222222 })
+const flickerLight=new THREE.PointLight(0xfff2cc,1.4,18);
+flickerLight.position.set(0,3,2);
+scene.add(flickerLight);
+
+/* ENVIRONMENT */
+const wallMat=new THREE.MeshStandardMaterial({
+ color:0x1c1c1c, roughness:0.95, metalness:0.05
+});
+
+const hallway=new THREE.Mesh(
+ new THREE.BoxGeometry(4,4,12),
+ wallMat
 );
-hallway.position.z = -4;
+hallway.position.z=-4;
 scene.add(hallway);
 
-/* ================= FLOOR ================= */
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(4,10),
-  new THREE.MeshStandardMaterial({ color:0x2a2a2a })
+/* FLOOR */
+const floor=new THREE.Mesh(
+ new THREE.PlaneGeometry(4,12),
+ new THREE.MeshStandardMaterial({color:0x151515,roughness:0.85})
 );
-floor.rotation.x = -Math.PI/2;
+floor.rotation.x=-Math.PI/2;
 floor.position.set(0,0,-4);
 scene.add(floor);
 
-/* ================= DOOR ================= */
-const doorGroup = new THREE.Group();
-scene.add(doorGroup);
-
-const door = new THREE.Mesh(
-  new THREE.BoxGeometry(2,3.5,0.25),
-  new THREE.MeshStandardMaterial({ color:0x550000 })
+/* HANDS */
+const hand=new THREE.Mesh(
+ new THREE.BoxGeometry(0.2,0.3,0.5),
+ new THREE.MeshStandardMaterial({color:0x7a5a4a,roughness:0.8})
 );
-door.position.set(0,1.75,-3.5);
-doorGroup.add(door);
+hand.position.set(0.4,-0.4,-1);
+camera.add(hand);
 
-/* ================= BLOOD DRIPS ================= */
-const bloodDrops = [];
-const bloodMat = new THREE.MeshStandardMaterial({ color:0x880000 });
+/* FLASHLIGHT */
+const beam=new THREE.SpotLight(0xffffff,2,10,0.6,0.7);
+beam.position.set(0.4,-0.4,-1);
+beam.target.position.set(0,0,-5);
+camera.add(beam);
+camera.add(beam.target);
 
-for(let i=0;i<25;i++){
-  const d = new THREE.Mesh(
-    new THREE.SphereGeometry(0.035,8,8),
-    bloodMat
-  );
-  d.position.set(
-    (Math.random()-0.5)*1.6,
-    3.6 + Math.random(),
-    -3.4
-  );
-  d.userData.speed = 0.004 + Math.random()*0.008;
-  bloodDrops.push(d);
-  scene.add(d);
+/* AI IMPOSTOR */
+const impostor=new THREE.Mesh(
+ new THREE.CapsuleGeometry(0.35,1.4,6,12),
+ new THREE.MeshStandardMaterial({color:0x333333})
+);
+impostor.position.set(0,0,-6);
+scene.add(impostor);
+
+/* BLOOD DRIP */
+const drops=[];
+for(let i=0;i<20;i++){
+ const d=new THREE.Mesh(
+  new THREE.SphereGeometry(0.03,8,8),
+  new THREE.MeshStandardMaterial({color:0x770000})
+ );
+ d.position.set((Math.random()-0.5)*1.6,3+Math.random(),-4);
+ d.userData.spd=0.003+Math.random()*0.005;
+ drops.push(d);scene.add(d);
 }
 
-/* ================= BLOOD POOL ================= */
-const bloodPool = new THREE.Mesh(
-  new THREE.CircleGeometry(0.15,32),
-  new THREE.MeshStandardMaterial({ color:0x660000 })
-);
-bloodPool.rotation.x = -Math.PI/2;
-bloodPool.position.set(0,0.02,-3.1);
-scene.add(bloodPool);
-
-/* ================= NETWORK ================= */
-const statusEl = document.getElementById("status");
-let doorOpening = false;
-
-const socket = new WebSocket("wss://fifth-door-server.onrender.com");
-socket.onopen = () => statusEl.textContent = "The door is sealed…";
-socket.onmessage = e => {
-  const data = JSON.parse(e.data);
-  if(data.type === "init"){
-    statusEl.textContent = "Enter.";
-    doorOpening = true;
-  }
-};
-
-/* ================= ANIMATION ================= */
-let doorAngle = 0;
+/* STATE */
+let danger=0;
+let t=0;
 
 function animate(){
-  requestAnimationFrame(animate);
+ requestAnimationFrame(animate);
+ t+=0.01;
 
-  // blood drips
-  bloodDrops.forEach(d=>{
-    d.position.y -= d.userData.speed;
-    if(d.position.y < 0.05) d.position.y = 3.6;
-  });
+ /* light flicker */
+ flickerLight.intensity=1.2+Math.sin(t*8)*0.3;
 
-  // pool grows
-  bloodPool.scale.x += 0.0006;
-  bloodPool.scale.y += 0.0006;
+ /* dust illusion */
+ scene.fog.density=0.07+Math.sin(t*2)*0.01;
 
-  // door opens
-  if(doorOpening && doorAngle > -Math.PI/2){
-    doorAngle -= 0.01;
-    doorGroup.rotation.y = doorAngle;
-  }
+ /* hand breathing */
+ hand.position.y=-0.4+Math.sin(t*1.5)*0.02;
 
-  renderer.render(scene,camera);
+ /* impostor uncanny motion */
+ impostor.position.x=Math.sin(t*0.4)*0.4;
+ impostor.rotation.y=Math.sin(t*0.2)*0.3;
+
+ /* blood */
+ drops.forEach(d=>{
+  d.position.y-=d.userData.spd;
+  if(d.position.y<0.05)d.position.y=3;
+ });
+
+ renderer.render(scene,camera);
 }
 animate();
 
-/* ================= RESIZE ================= */
 addEventListener("resize",()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight, false);
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
 });
 </script>
 </body>
