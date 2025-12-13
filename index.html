@@ -10,45 +10,65 @@ html,body{
   height:100%;
   overflow:hidden;
   background:#000;
-  font-family:Arial,sans-serif;
+  font-family:Arial, sans-serif;
 }
-canvas{display:block;width:100%;height:100%;}
+canvas{ display:block; }
 
-#hud{
+#ui{
   position:absolute;
-  bottom:20px;
+  top:20px;
   left:20px;
-  color:#aaa;
+  color:#ccc;
+  background:rgba(0,0,0,0.6);
+  padding:10px 14px;
+  border-radius:4px;
+  z-index:10;
   font-size:14px;
-  z-index:5;
 }
 
 #menu{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.85);
+  background:rgba(0,0,0,0.9);
   color:#ccc;
   display:none;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-  flex-direction:column;
-  z-index:10;
+  z-index:20;
+  text-align:center;
 }
-#menu.visible{display:flex;}
+#menu h2{ margin-bottom:20px; }
+#menu p{ line-height:1.6; opacity:.8; }
+#menu button{
+  margin-top:20px;
+  padding:10px 20px;
+  background:#222;
+  color:#ccc;
+  border:none;
+  cursor:pointer;
+}
 </style>
 </head>
 
 <body>
 
-<div id="hud">WASD Move | Shift Sprint | Space Jump | F Flashlight | Esc Menu</div>
+<div id="ui">
+<b>FIFTH DOOR</b><br>
+WASD Move · Mouse Look · F Flashlight · Shift Sprint · Esc Menu
+</div>
 
 <div id="menu">
-  <h2>PAUSED</h2>
-  <p>WASD – Move</p>
-  <p>Shift – Sprint</p>
-  <p>Space – Jump</p>
-  <p>F – Flashlight</p>
-  <p>Esc – Resume / Leave</p>
+<h2>PAUSED</h2>
+<p>
+WASD — Move<br>
+Mouse — Look<br>
+Shift — Sprint<br>
+Space — Jump<br>
+F — Flashlight<br>
+Esc — Close Menu
+</p>
+<button onclick="toggleMenu()">Resume</button>
 </div>
 
 <canvas id="c"></canvas>
@@ -56,131 +76,158 @@ canvas{display:block;width:100%;height:100%;}
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 
 <script>
-/* ================= CORE ================= */
+/* ================= BASIC SETUP ================= */
 const canvas = document.getElementById("c");
-const menu = document.getElementById("menu");
-
-/* ================= RENDERER ================= */
-const renderer = new THREE.WebGLRenderer({ canvas });
-renderer.setSize(innerWidth, innerHeight);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
 renderer.setClearColor(0x000000, 1);
 
-/* ================= SCENE ================= */
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 2, 18);
+scene.fog = new THREE.Fog(0x000000, 3, 25);
 
 /* ================= CAMERA ================= */
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 50);
-camera.position.set(0, 1.6, 8);
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  100
+);
+camera.position.set(0, 1.6, 5);
 scene.add(camera);
 
 /* ================= LIGHT ================= */
-scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-const flashlight = new THREE.SpotLight(0xffffff, 2, 12, Math.PI/7, 0.4);
+scene.add(new THREE.AmbientLight(0x222222, 0.5));
+
+const flashlight = new THREE.SpotLight(
+  0xffffff, 2.5, 15, Math.PI / 6, 0.4, 1
+);
+flashlight.visible = true;
 camera.add(flashlight);
 camera.add(flashlight.target);
-flashlight.visible = true;
 
-/* ================= ENV ================= */
-const wallMat = new THREE.MeshStandardMaterial({ color:0x222222, roughness:0.9 });
+/* ================= SIMPLE BUILDING ================= */
+const wallMat = new THREE.MeshStandardMaterial({ color:0x1b1b1b, roughness:0.9 });
+const floorMat = new THREE.MeshStandardMaterial({ color:0x111111 });
+
 function wall(w,h,x,y,z,ry=0){
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), wallMat);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,0.2), wallMat);
   m.position.set(x,y,z);
   m.rotation.y = ry;
   scene.add(m);
 }
-wall(10,4,0,2,-6);
-wall(10,4,-4,2,-2, Math.PI/2);
-wall(10,4, 4,2,-2,-Math.PI/2);
+
+function room(x,z){
+  wall(8,3,x,1.5,z-4);
+  wall(8,3,x,1.5,z+4);
+  wall(8,3,x-4,1.5,z,Math.PI/2);
+  wall(8,3,x+4,1.5,z,-Math.PI/2);
+}
 
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(8,40),
-  new THREE.MeshStandardMaterial({ color:0x111111 })
+  new THREE.PlaneGeometry(50,50),
+  floorMat
 );
 floor.rotation.x = -Math.PI/2;
-floor.position.z = -10;
 scene.add(floor);
 
-/* ================= FAKE PLAYER (AI) ================= */
-const fakePlayer = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.3,1.2),
-  new THREE.MeshStandardMaterial({ color:0x444444 })
-);
-fakePlayer.position.set(1,0.9,-5);
-scene.add(fakePlayer);
-
-let betrayalTriggered = false;
+/* Rooms */
+room(0,0);
+room(0,-10);
+room(10,0);
+room(-10,0);
 
 /* ================= PLAYER MOVEMENT ================= */
-const keys = {};
-let velocityY = 0;
-let onGround = true;
-let paused = false;
+let velocity = new THREE.Vector3();
+let direction = new THREE.Vector3();
 
-addEventListener("keydown",e=>{
-  keys[e.code] = true;
-  if(e.code==="KeyF") flashlight.visible = !flashlight.visible;
-  if(e.code==="Escape"){
-    paused = !paused;
-    menu.classList.toggle("visible", paused);
+let move = { forward:false, backward:false, left:false, right:false };
+let sprint = false;
+let canJump = true;
+let flashlightOn = true;
+
+/* ================= MOUSE LOOK ================= */
+let pitch = 0, yaw = 0;
+const sensitivity = 0.002;
+
+document.body.addEventListener("click", ()=>{
+  document.body.requestPointerLock();
+});
+
+document.addEventListener("mousemove", e=>{
+  if(document.pointerLockElement){
+    yaw -= e.movementX * sensitivity;
+    pitch -= e.movementY * sensitivity;
+    pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+    camera.rotation.set(pitch, yaw, 0);
   }
 });
-addEventListener("keyup",e=>keys[e.code]=false);
+
+/* ================= INPUT ================= */
+document.addEventListener("keydown", e=>{
+  if(e.code==="KeyW") move.forward=true;
+  if(e.code==="KeyS") move.backward=true;
+  if(e.code==="KeyA") move.left=true;
+  if(e.code==="KeyD") move.right=true;
+  if(e.code==="ShiftLeft") sprint=true;
+  if(e.code==="Space" && canJump){
+    velocity.y = 5;
+    canJump = false;
+  }
+  if(e.code==="KeyF"){
+    flashlightOn = !flashlightOn;
+    flashlight.visible = flashlightOn;
+  }
+  if(e.code==="Escape"){
+    toggleMenu();
+  }
+});
+
+document.addEventListener("keyup", e=>{
+  if(e.code==="KeyW") move.forward=false;
+  if(e.code==="KeyS") move.backward=false;
+  if(e.code==="KeyA") move.left=false;
+  if(e.code==="KeyD") move.right=false;
+  if(e.code==="ShiftLeft") sprint=false;
+});
+
+/* ================= MENU ================= */
+const menu = document.getElementById("menu");
+let paused = false;
+
+function toggleMenu(){
+  paused = !paused;
+  menu.style.display = paused ? "flex" : "none";
+  if(paused){
+    document.exitPointerLock();
+  } else {
+    document.body.requestPointerLock();
+  }
+}
 
 /* ================= LOOP ================= */
 const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
-  if(paused) return;
-
   const dt = clock.getDelta();
 
-  // Forward drift (core idea preserved)
-  camera.position.z -= 0.6 * dt;
+  if(!paused){
+    direction.set(0,0,0);
+    if(move.forward) direction.z -= 1;
+    if(move.backward) direction.z += 1;
+    if(move.left) direction.x -= 1;
+    if(move.right) direction.x += 1;
+    direction.normalize();
 
-  let speed = keys["ShiftLeft"] ? 4 : 2;
-  if(keys["KeyW"]) camera.position.z -= speed * dt;
-  if(keys["KeyS"]) camera.position.z += speed * dt;
-  if(keys["KeyA"]) camera.position.x -= speed * dt;
-  if(keys["KeyD"]) camera.position.x += speed * dt;
+    const speed = sprint ? 6 : 3;
+    velocity.x += direction.x * speed * dt;
+    velocity.z += direction.z * speed * dt;
 
-  if(keys["Space"] && onGround){
-    velocityY = 4;
-    onGround = false;
-  }
+    camera.translateX(velocity.x * dt);
+    camera.translateZ(velocity.z * dt);
 
-  velocityY -= 9.8 * dt;
-  camera.position.y += velocityY * dt;
-  if(camera.position.y <= 1.6){
-    camera.position.y = 1.6;
-    velocityY = 0;
-    onGround = true;
-  }
+    velocity.y -= 9.8 * dt;
+    camera.position.y += velocity.y * dt;
 
-  // Fake player stalking
-  fakePlayer.position.z += Math.sin(performance.now()*0.001)*0.002;
-
-  // Betrayal trigger
-  const dist = camera.position.distanceTo(fakePlayer.position);
-  if(dist < 1.2 && !betrayalTriggered){
-    betrayalTriggered = true;
-    flashlight.visible = false;
-    camera.position.x += 1.5;
-  }
-
-  renderer.render(scene, camera);
-}
-
-animate();
-
-/* ================= RESIZE ================= */
-addEventListener("resize",()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
-});
-</script>
-
-</body>
-</html>
+    if(camera.position.y < 1.6){
