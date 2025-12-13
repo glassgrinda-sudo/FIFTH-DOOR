@@ -5,44 +5,27 @@
 <title>FIFTH DOOR</title>
 <style>
 html,body{
-  margin:0;
-  height:100%;
-  overflow:hidden;
-  background:#000;
-  font-family:Arial, sans-serif;
+  margin:0;height:100%;overflow:hidden;background:#000;
+  font-family:Arial,sans-serif;
 }
 canvas{display:block}
 
 #ui{
-  position:absolute;
-  top:20px;
-  left:20px;
-  color:#ccc;
-  background:rgba(0,0,0,0.65);
-  padding:12px 16px;
-  border-radius:6px;
-  z-index:10;
+  position:absolute;top:20px;left:20px;
+  color:#ccc;background:rgba(0,0,0,0.65);
+  padding:12px 16px;border-radius:6px;
+  z-index:10
 }
 
 #overlay{
-  position:fixed;
-  inset:0;
-  background:#000;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  flex-direction:column;
-  color:#aaa;
-  font-size:18px;
-  letter-spacing:1px;
-  z-index:20;
+  position:fixed;inset:0;background:#000;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;color:#aaa;
+  font-size:20px;letter-spacing:1px;
+  z-index:20;transition:opacity 1.2s ease;
 }
-#overlay small{
-  margin-top:12px;
-  opacity:0.6;
-  font-size:14px;
-}
-.hidden{display:none}
+#overlay.fade{opacity:0;pointer-events:none}
+#overlay small{margin-top:12px;font-size:14px;opacity:.6}
 </style>
 </head>
 <body>
@@ -61,113 +44,106 @@ canvas{display:block}
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 <script>
-/* ================= BASIC SETUP ================= */
+/* ================= SETUP ================= */
 const canvas = document.getElementById("c");
 const overlay = document.getElementById("overlay");
 const statusEl = document.getElementById("status");
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+const renderer = new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth,innerHeight);
 renderer.setClearColor(0x050505,1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x050505, 0.08);
+scene.fog = new THREE.FogExp2(0x050505,0.06);
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 50);
-camera.position.set(0,1.65,5);
+const camera = new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,50);
+camera.position.set(0,1.65,8); // START BACK
 scene.add(camera);
 
 /* ================= LIGHTING ================= */
 scene.add(new THREE.AmbientLight(0x222222,0.4));
 
-const flickerLight = new THREE.PointLight(0xfff2cc,1.4,18);
-flickerLight.position.set(0,3,2);
-scene.add(flickerLight);
+const mainLight = new THREE.PointLight(0xfff2cc,0.6,20);
+mainLight.position.set(0,3,0);
+scene.add(mainLight);
 
-/* ================= ENVIRONMENT ================= */
+/* ================= HALLWAY ================= */
 const wallMat = new THREE.MeshStandardMaterial({
-  color:0x1c1c1c, roughness:0.95, metalness:0.05
+  color:0x1c1c1c,roughness:.95
 });
 
 const hallway = new THREE.Mesh(
   new THREE.BoxGeometry(4,4,12),
   wallMat
 );
-hallway.position.z = -4;
+hallway.position.z = -2;
 scene.add(hallway);
 
+/* ================= FLOOR ================= */
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(4,12),
-  new THREE.MeshStandardMaterial({ color:0x151515, roughness:0.85 })
+  new THREE.MeshStandardMaterial({color:0x141414,roughness:.9})
 );
 floor.rotation.x = -Math.PI/2;
-floor.position.set(0,0,-4);
+floor.position.set(0,0,-2);
 scene.add(floor);
 
-/* ================= HAND + FLASHLIGHT ================= */
-const hand = new THREE.Mesh(
-  new THREE.BoxGeometry(0.2,0.3,0.5),
-  new THREE.MeshStandardMaterial({ color:0x7a5a4a, roughness:0.8 })
+/* ================= DOOR ================= */
+const door = new THREE.Mesh(
+  new THREE.BoxGeometry(2,3.5,0.25),
+  new THREE.MeshStandardMaterial({color:0x4a0e0e,roughness:.7})
 );
-hand.position.set(0.4,-0.4,-1);
+door.position.set(0,1.75,-6);
+scene.add(door);
+
+/* ================= HAND ================= */
+const hand = new THREE.Mesh(
+  new THREE.BoxGeometry(.2,.3,.5),
+  new THREE.MeshStandardMaterial({color:0x7a5a4a})
+);
+hand.position.set(.4,-.4,-1);
 camera.add(hand);
 
-const beam = new THREE.SpotLight(0xffffff,2,10,0.6,0.7);
-beam.position.copy(hand.position);
-beam.target.position.set(0,0,-5);
-camera.add(beam);
-camera.add(beam.target);
-
-/* ================= IMPOSTOR ================= */
-const impostor = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.35,1.4,6,12),
-  new THREE.MeshStandardMaterial({ color:0x333333 })
-);
-impostor.position.set(0,0,-6);
-scene.add(impostor);
-
 /* ================= STATE ================= */
-let started = false;
-let t = 0;
+let started=false;
+let enterTime=0;
 
-/* ================= ENTER GAME ================= */
+/* ================= ENTER ================= */
 function enterGame(){
   if(started) return;
-  started = true;
+  started=true;
 
-  overlay.classList.add("hidden");
-  statusEl.textContent = "Connected";
+  statusEl.textContent="Connected";
+  overlay.classList.add("fade");
 
-  if(document.documentElement.requestFullscreen){
-    document.documentElement.requestFullscreen();
-  }
-
+  document.documentElement.requestFullscreen?.();
   canvas.requestPointerLock?.();
+
+  enterTime=performance.now();
 }
 
-window.addEventListener("keydown",e=>{
-  if(e.code === "Space") enterGame();
+/* ================= INPUT ================= */
+addEventListener("keydown",e=>{
+  if(e.code==="Space") enterGame();
 });
 
-/* ================= ANIMATION LOOP ================= */
+/* ================= LOOP ================= */
 function animate(){
   requestAnimationFrame(animate);
 
-  if(!started){
-    renderer.render(scene,camera);
-    return;
+  if(started){
+    const t=(performance.now()-enterTime)/1000;
+
+    // CAMERA PUSH INTO HALLWAY
+    camera.position.z = THREE.MathUtils.lerp(8,3,Math.min(t/2,1));
+
+    // LIGHT RAMP
+    mainLight.intensity = THREE.MathUtils.lerp(0.6,1.4,Math.min(t/2,1));
+
+    // BREATHING HAND
+    hand.position.y = -0.4 + Math.sin(t*1.5)*0.02;
   }
-
-  t += 0.01;
-
-  flickerLight.intensity = 1.2 + Math.sin(t*8)*0.3;
-  scene.fog.density = 0.07 + Math.sin(t*2)*0.01;
-
-  hand.position.y = -0.4 + Math.sin(t*1.5)*0.02;
-
-  impostor.position.x = Math.sin(t*0.4)*0.4;
-  impostor.rotation.y = Math.sin(t*0.2)*0.3;
 
   renderer.render(scene,camera);
 }
@@ -175,7 +151,7 @@ animate();
 
 /* ================= RESIZE ================= */
 addEventListener("resize",()=>{
-  camera.aspect = innerWidth/innerHeight;
+  camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
