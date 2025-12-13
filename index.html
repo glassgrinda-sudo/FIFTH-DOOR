@@ -2,9 +2,40 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>TEST</title>
+<title>Canvas Visibility Test</title>
+<style>
+html,body{
+  margin:0;
+  padding:0;
+  height:100%;
+  background:#111;
+}
+#label{
+  position:absolute;
+  top:20px;
+  left:20px;
+  color:white;
+  font-size:24px;
+  z-index:10;
+}
+canvas{
+  width:100vw;
+  height:100vh;
+  background:red;
+  display:block;
+}
+</style>
 </head>
-<body style="margin:0;background:red;color:white;font-size:48px;">
-THIS SHOULD BE RED
-</body>
-</html>
+<body>
+
+<div id="label">YOU SHOULD SEE A RED BACKGROUND</div>
+<canvas id="c"></canvas>
+
+<script>
+const c = document.getElementById("c");
+c.width = window.innerWidth;
+c.height = window.innerHeight;
+
+document.body.insertAdjacentHTML(
+  "beforeend",
+  "<div style='position:absolute;bottom:20px;left:
