@@ -2,30 +2,9 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Canvas Test</title>
-<style>
-html,body{margin:0;padding:0;background:#000}
-canvas{display:block}
-</style>
+<title>TEST</title>
 </head>
-<body>
-
-<canvas id="c"></canvas>
-
-<script>
-const c = document.getElementById("c");
-c.width = window.innerWidth;
-c.height = window.innerHeight;
-
-const ctx = c.getContext("2d");
-
-ctx.fillStyle = "red";
-ctx.fillRect(0, 0, c.width, c.height);
-
-ctx.fillStyle = "white";
-ctx.font = "48px Arial";
-ctx.fillText("CAN YOU SEE THIS?", 50, 100);
-</script>
-
+<body style="margin:0;background:red;color:white;font-size:48px;">
+THIS SHOULD BE RED
 </body>
 </html>
