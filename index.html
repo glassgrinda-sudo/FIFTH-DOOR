@@ -52,22 +52,32 @@ renderer.setClearColor(0x050505, 1);
 /* ================= SCENE & CAMERA ================= */
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0, 1.6, 6);
+camera.position.set(0, 1.6, 5);
 scene.add(camera);
 
 /* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const keyLight = new THREE.PointLight(0xffffff, 1.2, 30);
-keyLight.position.set(0, 3, 4);
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+const keyLight = new THREE.PointLight(0xffffff, 1.4, 40);
+keyLight.position.set(0, 3, 2);
 scene.add(keyLight);
 
-/* ================= HALLWAY ================= */
+/* ================= HALLWAY (IN FRONT OF CAMERA) ================= */
 const hallway = new THREE.Mesh(
   new THREE.BoxGeometry(4,4,10),
-  new THREE.MeshStandardMaterial({ color:0x222222, side:THREE.BackSide })
+  new THREE.MeshStandardMaterial({ color:0x222222 })
 );
-hallway.position.z = 2;
+hallway.position.z = -4;
 scene.add(hallway);
+
+/* ================= FLOOR ================= */
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(4,10),
+  new THREE.MeshStandardMaterial({ color:0x2a2a2a })
+);
+floor.rotation.x = -Math.PI/2;
+floor.position.set(0,0,-4);
+scene.add(floor);
 
 /* ================= DOOR ================= */
 const doorGroup = new THREE.Group();
@@ -77,8 +87,7 @@ const door = new THREE.Mesh(
   new THREE.BoxGeometry(2,3.5,0.25),
   new THREE.MeshStandardMaterial({ color:0x550000 })
 );
-door.position.y = 1.75;
-door.position.z = -1;
+door.position.set(0,1.75,-3.5);
 doorGroup.add(door);
 
 /* ================= BLOOD DRIPS ================= */
@@ -93,7 +102,7 @@ for(let i=0;i<25;i++){
   d.position.set(
     (Math.random()-0.5)*1.6,
     3.6 + Math.random(),
-    -0.85
+    -3.4
   );
   d.userData.speed = 0.004 + Math.random()*0.008;
   bloodDrops.push(d);
@@ -106,10 +115,10 @@ const bloodPool = new THREE.Mesh(
   new THREE.MeshStandardMaterial({ color:0x660000 })
 );
 bloodPool.rotation.x = -Math.PI/2;
-bloodPool.position.set(0,0.02,0.5);
+bloodPool.position.set(0,0.02,-3.1);
 scene.add(bloodPool);
 
-/* ================= NETWORK (GATE) ================= */
+/* ================= NETWORK ================= */
 const statusEl = document.getElementById("status");
 let doorOpening = false;
 
