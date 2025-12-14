@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>FIFTH DOOR – EXPLORATION CORE</title>
+<title>FIFTH DOOR – PROTOTYPE</title>
 <style>
 html,body{
   margin:0;
@@ -12,50 +12,40 @@ html,body{
   background:#000;
   font-family:Arial,sans-serif;
 }
-canvas{display:block;width:100%;height:100%;}
-
+canvas{display:block;}
 #hud{
   position:absolute;
-  top:10px;
-  left:10px;
-  color:#aaa;
+  top:10px;left:10px;
+  color:#ccc;
   font-size:14px;
-  z-index:10;
+  z-index:5;
 }
-
 #menu{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.85);
+  background:rgba(0,0,0,0.9);
   color:#ccc;
   display:none;
   align-items:center;
   justify-content:center;
-  text-align:left;
+  flex-direction:column;
   z-index:20;
-}
-#menu.visible{display:flex;}
-#menu div{
-  max-width:400px;
 }
 </style>
 </head>
 <body>
 
-<div id="hud">WASD move | Mouse look | F flashlight | Shift sprint | Esc menu</div>
+<div id="hud">
+  WASD Move | Mouse Look | F Flashlight | Shift Sprint | Esc Menu
+</div>
 
 <div id="menu">
-  <div>
-    <h2>PAUSED</h2>
-    <p>
-      WASD – Move<br>
-      Mouse – Look<br>
-      Shift – Sprint<br>
-      Space – Jump<br>
-      F – Flashlight<br>
-      Esc – Resume
-    </p>
-  </div>
+  <h2>Paused</h2>
+  <p>WASD – Move</p>
+  <p>Mouse – Look</p>
+  <p>F – Flashlight</p>
+  <p>Shift – Sprint</p>
+  <p>Esc – Resume</p>
 </div>
 
 <canvas id="c"></canvas>
@@ -64,135 +54,147 @@ canvas{display:block;width:100%;height:100%;}
 
 <script>
 /* ================= CORE ================= */
-const canvas = document.getElementById("c");
-const menu = document.getElementById("menu");
+const canvas=document.getElementById("c");
+const menu=document.getElementById("menu");
 
-/* ================= RENDERER ================= */
-const renderer = new THREE.WebGLRenderer({canvas,antialias:true});
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setSize(innerWidth,innerHeight);
-renderer.setClearColor(0x050505,1);
+renderer.setClearColor(0x000000,1);
 
-/* ================= SCENE ================= */
-const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x050505, 5, 25);
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0x000000,2,18);
 
-/* ================= CAMERA ================= */
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,50);
 camera.position.set(0,1.6,5);
 scene.add(camera);
 
 /* ================= LIGHT ================= */
-scene.add(new THREE.AmbientLight(0x404040,0.4));
-
-const flashlight = new THREE.SpotLight(0xffffff,2,15,Math.PI/7,0.4,1);
-flashlight.position.set(0,0,0);
-flashlight.target.position.set(0,0,-1);
+scene.add(new THREE.AmbientLight(0x222222,0.3));
+const flashlight=new THREE.SpotLight(0xffffff,2,10,Math.PI/7,0.5,1);
+flashlight.visible=true;
 camera.add(flashlight);
 camera.add(flashlight.target);
-let flashlightOn = true;
 
-/* ================= ENVIRONMENT ================= */
-const wallMat = new THREE.MeshStandardMaterial({color:0x1c1c1c,roughness:0.9});
-const floorMat = new THREE.MeshStandardMaterial({color:0x111111,roughness:1});
-
-function wall(w,h,x,y,z,ry=0){
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),wallMat);
-  m.position.set(x,y,z);
-  m.rotation.y=ry;
-  scene.add(m);
+/* ================= ENV ================= */
+const wallMat=new THREE.MeshStandardMaterial({color:0x222222});
+function room(x,z){
+  const g=new THREE.Group();
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(6,6),wallMat);
+  floor.rotation.x=-Math.PI/2;
+  g.add(floor);
+  const back=new THREE.Mesh(new THREE.PlaneGeometry(6,3),wallMat);
+  back.position.set(0,1.5,-3);
+  g.add(back);
+  g.position.set(x,0,z);
+  scene.add(g);
+  return g;
 }
 
-function floor(w,d,x,z){
-  const f=new THREE.Mesh(new THREE.PlaneGeometry(w,d),floorMat);
-  f.rotation.x=-Math.PI/2;
-  f.position.set(x,0,z);
-  scene.add(f);
-}
-
-floor(10,30,0,-10);
-wall(10,4,0,2,-25);
-wall(30,4,-5,2,-10,Math.PI/2);
-wall(30,4, 5,2,-10,-Math.PI/2);
+const rooms=[
+  room(0,0),
+  room(0,-8),
+  room(6,-8),
+  room(-6,-8)
+];
 
 /* ================= INPUT ================= */
-const keys = {};
-let paused = false;
-
-document.addEventListener("keydown",e=>{
+const keys={};
+addEventListener("keydown",e=>{
   keys[e.code]=true;
-
   if(e.code==="Escape"){
-    paused = !paused;
-    menu.classList.toggle("visible", paused);
-    if(!paused) canvas.requestPointerLock();
-    document.exitPointerLock();
-  }
-
-  if(e.code==="KeyF"){
-    flashlightOn=!flashlightOn;
-    flashlight.intensity = flashlightOn ? 2 : 0;
+    menu.style.display=menu.style.display==="flex"?"none":"flex";
   }
 });
+addEventListener("keyup",e=>keys[e.code]=false);
 
-document.addEventListener("keyup",e=>keys[e.code]=false);
-
-/* ================= MOUSE LOOK ================= */
-let pitch=0,yaw=0;
-canvas.addEventListener("click",()=>canvas.requestPointerLock());
-
-document.addEventListener("mousemove",e=>{
-  if(document.pointerLockElement!==canvas || paused) return;
-  yaw -= e.movementX*0.002;
-  pitch -= e.movementY*0.002;
-  pitch = Math.max(-1.5,Math.min(1.5,pitch));
-});
-
-/* ================= MOVEMENT ================= */
-const velocity = new THREE.Vector3();
-const direction = new THREE.Vector3();
-let onGround = true;
-
-function updateMovement(dt){
-  direction.set(0,0,0);
-  if(keys.KeyW) direction.z -= 1;
-  if(keys.KeyS) direction.z += 1;
-  if(keys.KeyA) direction.x -= 1;
-  if(keys.KeyD) direction.x += 1;
-
-  direction.normalize();
-
-  const speed = keys.ShiftLeft ? 6 : 3;
-
-  velocity.x = direction.x * speed;
-  velocity.z = direction.z * speed;
-
-  if(keys.Space && onGround){
-    velocity.y = 5;
-    onGround = false;
-  }
-
-  velocity.y -= 9.8 * dt;
-
-  camera.position.x += (Math.sin(yaw)*velocity.z + Math.cos(yaw)*velocity.x)*dt;
-  camera.position.z += (Math.cos(yaw)*velocity.z - Math.sin(yaw)*velocity.x)*dt;
-  camera.position.y += velocity.y*dt;
-
-  if(camera.position.y<1.6){
-    camera.position.y=1.6;
-    velocity.y=0;
-    onGround=true;
-  }
-
+let yaw=0,pitch=0;
+addEventListener("mousemove",e=>{
+  if(menu.style.display==="flex") return;
+  yaw-=e.movementX*0.002;
+  pitch-=e.movementY*0.002;
+  pitch=Math.max(-1.5,Math.min(1.5,pitch));
   camera.rotation.set(pitch,yaw,0);
+});
+
+/* ================= PLAYER ================= */
+let speed=0.05;
+let isolatedTimer=0;
+let dragged=false;
+
+/* ================= A1: CLOSET DRAGGER ================= */
+function checkIsolation(dt){
+  isolatedTimer+=dt;
+  if(isolatedTimer>8 && !dragged){
+    dragged=true;
+    triggerDrag();
+  }
+}
+
+function triggerDrag(){
+  flashlight.visible=false;
+  setTimeout(()=>{
+    camera.position.set(0,1.6,-8);
+    flashlight.visible=true;
+    isolatedTimer=0;
+    dragged=false;
+    enemyAggro+=1;
+  },1200);
+}
+
+/* ================= A2: PSYCHO ROOMS ================= */
+function psychoEffects(){
+  const z=camera.position.z;
+  if(z<-6){
+    camera.fov=70+Math.sin(performance.now()*0.005)*5;
+    camera.updateProjectionMatrix();
+    flashlight.intensity=1+Math.sin(performance.now()*0.01)*0.5;
+  }else{
+    camera.fov=70;
+    flashlight.intensity=2;
+  }
+}
+
+/* ================= A3: FAKE PLAYERS ================= */
+const fakePlayers=["Alex","Jamie","Chris","Morgan","Taylor"];
+setInterval(()=>{
+  const name=fakePlayers[Math.floor(Math.random()*fakePlayers.length)];
+  console.log(name+" left the lobby");
+},6000);
+
+/* ================= A4: MAIN ENEMY ================= */
+let enemyPos=new THREE.Vector3(3,0,-8);
+let enemyAggro=0;
+
+function enemyUpdate(dt){
+  enemyPos.x+=Math.sin(performance.now()*0.001)*dt*(0.5+enemyAggro);
+  const d=enemyPos.distanceTo(camera.position);
+  if(d<3){
+    camera.rotation.z=Math.sin(performance.now()*0.02)*0.05;
+  }
 }
 
 /* ================= LOOP ================= */
-const clock = new THREE.Clock();
-
+const clock=new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
-  const dt = clock.getDelta();
-  if(!paused) updateMovement(dt);
+  const dt=clock.getDelta();
+
+  if(menu.style.display!=="flex"){
+    const dir=new THREE.Vector3();
+    if(keys["KeyW"]) dir.z-=1;
+    if(keys["KeyS"]) dir.z+=1;
+    if(keys["KeyA"]) dir.x-=1;
+    if(keys["KeyD"]) dir.x+=1;
+    dir.normalize();
+    const moveSpeed=(keys["ShiftLeft"]?speed*2:speed);
+    dir.applyEuler(camera.rotation);
+    camera.position.addScaledVector(dir,moveSpeed);
+    checkIsolation(dt);
+  }
+
+  psychoEffects();
+  enemyUpdate(dt);
+
   renderer.render(scene,camera);
 }
 animate();
@@ -207,3 +209,4 @@ addEventListener("resize",()=>{
 
 </body>
 </html>
+
