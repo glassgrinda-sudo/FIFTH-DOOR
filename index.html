@@ -1,30 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>FIFTH DOOR</title>
 <style>
-html,body{
+html,body {
   margin:0;
   width:100%;
   height:100%;
   overflow:hidden;
   background:#000;
+  font-family:Arial, sans-serif;
 }
-canvas{display:block}
-#ui{
+canvas { display:block; }
+
+#ui {
   position:fixed;
-  top:10px;
-  left:10px;
-  color:#aaa;
-  font-family:monospace;
+  top:20px;
+  left:20px;
+  color:#ccc;
+  background:rgba(0,0,0,0.6);
+  padding:10px 14px;
+  border-radius:4px;
   z-index:10;
+  font-size:14px;
+}
+
+#overlay {
+  position:fixed;
+  inset:0;
+  background:#000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  color:#aaa;
+  font-size:20px;
+  z-index:20;
 }
 </style>
 </head>
+
 <body>
 
-<div id="ui">WASD move · Mouse look · F flashlight</div>
+<div id="ui">
+  <b id="mode">LOBBY</b><br>
+  <span id="status">Waiting for players…</span>
+</div>
+
+<div id="overlay">
+  <div>CLICK TO LOCK MOUSE</div>
+  <small style="opacity:.6">You only cross once.</small>
+</div>
+
 <canvas id="c"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
@@ -32,162 +60,154 @@ canvas{display:block}
 <script>
 /* ================= BASIC SETUP ================= */
 const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({ canvas });
+const overlay = document.getElementById("overlay");
+const statusEl = document.getElementById("status");
+const modeEl = document.getElementById("mode");
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setSize(innerWidth, innerHeight);
-renderer.setClearColor(0x000000, 1);
+renderer.setPixelRatio(devicePixelRatio);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 2, 20);
+scene.fog = new THREE.Fog(0x050505, 3, 20);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0,1.6,5);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 50);
+camera.position.set(0,1.6,6);
+
 scene.add(camera);
 
 /* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0x222222));
+scene.add(new THREE.AmbientLight(0x222222,0.3));
 
-const flashlight = new THREE.SpotLight(0xffffff, 2, 15, Math.PI/7, 0.5, 1);
+const flashlight = new THREE.SpotLight(0xffffff, 2, 12, Math.PI/6, 0.4, 1);
 flashlight.position.set(0,0,0);
 flashlight.target.position.set(0,0,-1);
 camera.add(flashlight);
 camera.add(flashlight.target);
 
 /* ================= INPUT ================= */
-const keys = {};
-addEventListener("keydown",e=>{
-  keys[e.code]=true;
-  if(e.code==="KeyF") flashlight.visible=!flashlight.visible;
-});
-addEventListener("keyup",e=>keys[e.code]=false);
+let keys = {};
+let yaw = 0, pitch = 0;
+let pointerLocked = false;
 
-let yaw=0, pitch=0;
-addEventListener("mousemove",e=>{
+document.body.addEventListener("click", ()=>{
+  document.body.requestPointerLock();
+});
+
+document.addEventListener("pointerlockchange", ()=>{
+  pointerLocked = document.pointerLockElement === document.body;
+  overlay.style.display = pointerLocked ? "none" : "flex";
+});
+
+addEventListener("mousemove", e=>{
+  if(!pointerLocked) return;
   yaw -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
-  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+  pitch = Math.max(-1.4, Math.min(1.4, pitch));
   camera.rotation.set(pitch, yaw, 0);
 });
 
-/* ================= COLLISION SYSTEM ================= */
-const colliders = [];
+addEventListener("keydown", e=>keys[e.code]=true);
+addEventListener("keyup", e=>keys[e.code]=false);
 
-function addCollider(mesh){
-  mesh.geometry.computeBoundingBox();
-  colliders.push(mesh);
+/* ================= LOBBY FAKE PLAYERS ================= */
+let fakePlayers = [];
+let inLobby = true;
+let lobbyStart = performance.now();
+
+function createFakePlayer(x,z){
+  const m = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.25,1),
+    new THREE.MeshStandardMaterial({color:0x555555})
+  );
+  m.position.set(x,1,z);
+  scene.add(m);
+  fakePlayers.push(m);
+}
+
+for(let i=0;i<6;i++){
+  createFakePlayer(
+    (Math.random()-0.5)*4,
+    (Math.random()-0.5)*4
+  );
 }
 
 /* ================= ENVIRONMENT ================= */
-const wallMat = new THREE.MeshStandardMaterial({ color:0x1b1b1b });
-function wall(w,h,x,y,z,ry=0){
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,0.3), wallMat);
+const walls = [];
+
+function wall(w,h,d,x,y,z){
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshStandardMaterial({color:0x1a1a1a})
+  );
   m.position.set(x,y,z);
-  m.rotation.y = ry;
   scene.add(m);
-  addCollider(m);
+  walls.push(m);
 }
 
-wall(10,4,0,2,-5);
-wall(10,4,-5,2,0,Math.PI/2);
-wall(10,4,5,2,0,-Math.PI/2);
+wall(10,4,0.5,0,2,-5);
+wall(0.5,4,10,-5,2,0);
+wall(0.5,4,10,5,2,0);
+wall(10,4,0.5,0,2,5);
 
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(12,12),
-  new THREE.MeshStandardMaterial({ color:0x111111 })
+  new THREE.PlaneGeometry(10,10),
+  new THREE.MeshStandardMaterial({color:0x111111})
 );
 floor.rotation.x = -Math.PI/2;
 scene.add(floor);
 
-/* ================= LOBBY SIMULATION ================= */
-const lobbyGroup = new THREE.Group();
-scene.add(lobbyGroup);
-
-const fakePlayers = [];
-for(let i=0;i<4;i++){
-  const p = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.3,1),
-    new THREE.MeshStandardMaterial({ color:0x444444 })
-  );
-  p.position.set(Math.random()*4-2,1,Math.random()*4-2);
-  lobbyGroup.add(p);
-  fakePlayers.push(p);
+/* ================= COLLISION ================= */
+function collides(pos){
+  for(const w of walls){
+    const b = new THREE.Box3().setFromObject(w);
+    if(b.containsPoint(pos)) return true;
+  }
+  return false;
 }
 
-let inLobby = true;
-setTimeout(()=>{
-  inLobby = false;
-  lobbyGroup.visible = false;
-}, 5000);
-
-/* ================= CLOSET DRAGGER ================= */
-const dragger = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.35,1.2),
-  new THREE.MeshStandardMaterial({ color:0x552222 })
-);
-dragger.position.set(2,1,2);
-scene.add(dragger);
-
-/* ================= PSYCHO ROOM ================= */
-const psychoZone = new THREE.Box3(
-  new THREE.Vector3(-2,0,-2),
-  new THREE.Vector3(2,3,2)
-);
-
-/* ================= MOVEMENT ================= */
-const velocity = new THREE.Vector3();
-const dir = new THREE.Vector3();
-const raycaster = new THREE.Raycaster();
-
-function canMove(nextPos){
-  const box = new THREE.Box3(
-    new THREE.Vector3(nextPos.x-0.3, nextPos.y-1.6, nextPos.z-0.3),
-    new THREE.Vector3(nextPos.x+0.3, nextPos.y+0.3, nextPos.z+0.3)
-  );
-  return !colliders.some(c=>{
-    const cb = new THREE.Box3().setFromObject(c);
-    return box.intersectsBox(cb);
-  });
-}
-
-/* ================= LOOP ================= */
+/* ================= GAME LOOP ================= */
 const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  /* lobby idle */
+  /* LOBBY BEHAVIOR */
   if(inLobby){
-    fakePlayers.forEach(p=>{
-      p.position.x += Math.sin(performance.now()*0.001)*0.001;
+    statusEl.textContent = "Players connected: " + fakePlayers.length;
+    fakePlayers.forEach((p,i)=>{
+      p.position.x += Math.sin(performance.now()*0.001+i)*0.001;
     });
+
+    if(performance.now() - lobbyStart > 6000){
+      inLobby = false;
+      modeEl.textContent = "GAME";
+      statusEl.textContent = "Stay together.";
+      fakePlayers.forEach(p=>scene.remove(p));
+      fakePlayers=[];
+      camera.position.set(0,1.6,3);
+    }
   }
 
-  /* movement */
-  dir.set(0,0,0);
-  if(keys.KeyW) dir.z -= 1;
-  if(keys.KeyS) dir.z += 1;
-  if(keys.KeyA) dir.x -= 1;
-  if(keys.KeyD) dir.x += 1;
-  dir.normalize();
+  /* MOVEMENT */
+  const speed = keys["ShiftLeft"] ? 4 : 2;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y=0; dir.normalize();
+  const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0,1,0));
 
-  velocity.copy(dir).applyEuler(camera.rotation).multiplyScalar(dt*3);
-  const nextPos = camera.position.clone().add(velocity);
-  if(canMove(nextPos)) camera.position.copy(nextPos);
+  let nextPos = camera.position.clone();
+  if(keys["KeyW"]) nextPos.add(dir.clone().multiplyScalar(speed*dt));
+  if(keys["KeyS"]) nextPos.add(dir.clone().multiplyScalar(-speed*dt));
+  if(keys["KeyA"]) nextPos.add(right.clone().multiplyScalar(speed*dt));
+  if(keys["KeyD"]) nextPos.add(right.clone().multiplyScalar(-speed*dt));
 
-  /* dragger proximity */
-  if(camera.position.distanceTo(dragger.position) < 1.5){
-    camera.position.lerp(new THREE.Vector3(0,1.6,4),0.1);
-  }
-
-  /* psycho room effect */
-  if(psychoZone.containsPoint(camera.position)){
-    floor.material.color.setHex(0x0f0f0f);
-  } else {
-    floor.material.color.setHex(0x111111);
-  }
+  if(!collides(nextPos)) camera.position.copy(nextPos);
 
   renderer.render(scene,camera);
 }
+
 animate();
 
 /* ================= RESIZE ================= */
@@ -197,6 +217,5 @@ addEventListener("resize",()=>{
   renderer.setSize(innerWidth,innerHeight);
 });
 </script>
-
 </body>
 </html>
