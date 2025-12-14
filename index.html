@@ -3,193 +3,198 @@
 <head>
 <meta charset="UTF-8">
 <title>FIFTH DOOR</title>
+
 <style>
-html,body { margin:0; overflow:hidden; background:#000; font-family:Arial; }
-#hud {
-  position:fixed; top:12px; left:12px;
-  color:#ddd; font-size:13px; z-index:10;
+html,body {
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  font-family:Arial, sans-serif;
 }
+
+#ui {
+  position:fixed;
+  top:10px;
+  left:10px;
+  color:#eee;
+  font-size:13px;
+  z-index:10;
+  opacity:0.85;
+}
+
 #hint {
-  position:fixed; bottom:12px; width:100%;
-  text-align:center; color:#aaa; font-size:12px;
+  position:fixed;
+  bottom:10px;
+  width:100%;
+  text-align:center;
+  color:#aaa;
+  font-size:12px;
+  opacity:0.7;
 }
 </style>
 </head>
+
 <body>
 
-<div id="hud">
+<div id="ui">
 <b>FIFTH DOOR</b><br>
 WASD move · Mouse look · F flashlight · Shift sprint · Esc unlock
 </div>
-<div id="hint">Click to lock mouse</div>
 
-<canvas id="c"></canvas>
+<div id="hint">Click to lock mouse</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 
 <script>
-/* ================= SETUP ================= */
-const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(devicePixelRatio);
+/* ================= BASIC SETUP ================= */
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 4, 30);
+scene.background = new THREE.Color(0x050505);
+scene.fog = new THREE.Fog(0x050505, 2, 18);
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0,1.6,6);
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  50
+);
+camera.position.set(0, 1.6, 5);
 
-/* ================= LIGHT ================= */
-scene.add(new THREE.AmbientLight(0x404040, 0.35));
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+document.body.appendChild(renderer.domElement);
 
-const flashlight = new THREE.SpotLight(0xffffff, 2.5, 15, Math.PI/6, 0.4);
-flashlight.visible = true;
-camera.add(flashlight);
-camera.add(flashlight.target);
-scene.add(camera);
+/* ================= LIGHTING ================= */
 
-/* ================= BUILDING ================= */
-const wallMat = new THREE.MeshStandardMaterial({color:0x1a1a1a, roughness:0.9});
-const floorMat = new THREE.MeshStandardMaterial({color:0x0f0f0f});
+// soft ambient so nothing is pure black
+scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+
+// FLASHLIGHT
+const flashlight = new THREE.SpotLight(
+  0xffffff,
+  2.5,
+  20,
+  Math.PI / 5,
+  0.35,
+  1
+);
+flashlight.castShadow = false;
+scene.add(flashlight);
+scene.add(flashlight.target);
+
+/* ================= ENVIRONMENT ================= */
+
+const wallMat = new THREE.MeshStandardMaterial({
+  color:0x1a1a1a,
+  roughness:0.95
+});
 
 function wall(w,h,x,y,z,ry=0){
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,0.2), wallMat);
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(w,h),
+    wallMat
+  );
   m.position.set(x,y,z);
   m.rotation.y = ry;
   scene.add(m);
 }
 
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(20,20), floorMat);
+// simple corridor room
+wall(10,4,0,2,-5);
+wall(10,4,0,2,5,Math.PI);
+wall(10,4,-5,2,0,Math.PI/2);
+wall(10,4,5,2,0,-Math.PI/2);
+
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(10,10),
+  new THREE.MeshStandardMaterial({ color:0x111111 })
+);
 floor.rotation.x = -Math.PI/2;
 scene.add(floor);
 
-// Main corridor
-wall(20,4,0,2,-10);
-wall(20,4,0,2,10);
-wall(0.2,4,-10,2,0);
-wall(0.2,4,10,2,0);
+/* ================= CONTROLS ================= */
 
-// Side rooms
-wall(6,4,-7,2,-3,Math.PI/2);
-wall(6,4,-7,2,3,Math.PI/2);
-
-/* ================= PLAYER ================= */
-const keys = {};
-let sprint = false;
 let locked = false;
-let yaw = 0, pitch = 0;
+let flashlightOn = true;
 
-document.addEventListener("keydown", e=>{
-  keys[e.code]=true;
-  if(e.code==="ShiftLeft") sprint=true;
-  if(e.code==="KeyF") flashlight.visible = !flashlight.visible;
-});
-document.addEventListener("keyup", e=>{
-  keys[e.code]=false;
-  if(e.code==="ShiftLeft") sprint=false;
-});
+const keys = {};
+document.addEventListener("keydown", e => {
+  keys[e.code] = true;
 
-canvas.addEventListener("click", ()=>{
-  canvas.requestPointerLock();
+  if(e.code === "KeyF"){
+    flashlightOn = !flashlightOn;
+    flashlight.intensity = flashlightOn ? 2.5 : 0;
+  }
 });
+document.addEventListener("keyup", e => keys[e.code] = false);
 
-document.addEventListener("pointerlockchange", ()=>{
-  locked = document.pointerLockElement===canvas;
-  document.getElementById("hint").style.display = locked?"none":"block";
+document.body.addEventListener("click", () => {
+  renderer.domElement.requestPointerLock();
 });
 
-document.addEventListener("mousemove", e=>{
+document.addEventListener("pointerlockchange", () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  document.getElementById("hint").style.display = locked ? "none" : "block";
+});
+
+let yaw = 0;
+let pitch = 0;
+
+document.addEventListener("mousemove", e => {
   if(!locked) return;
-  yaw -= e.movementX*0.002;
-  pitch -= e.movementY*0.002;
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
   pitch = Math.max(-1.5, Math.min(1.5, pitch));
-  camera.rotation.set(pitch,yaw,0);
 });
-
-/* ================= AI: CLOSET DRAGGER ================= */
-const dragger = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.3,1.2),
-  new THREE.MeshStandardMaterial({color:0x550000})
-);
-dragger.position.set(-5,1,-2);
-scene.add(dragger);
-
-let dragged=false;
-
-/* ================= AI: MAIN ENEMY ================= */
-const enemy = new THREE.Mesh(
-  new THREE.ConeGeometry(0.6,2,6),
-  new THREE.MeshStandardMaterial({color:0x111111})
-);
-enemy.position.set(5,1,-5);
-scene.add(enemy);
-
-let enemyDir = 1;
-
-/* ================= PSYCH ROOM ================= */
-const psychRoom = new THREE.Vector3(-7,0,0);
 
 /* ================= LOOP ================= */
+
 const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  /* Movement */
-  const speed = (sprint?5:2.5)*dt;
-  const forward = new THREE.Vector3(
-    Math.sin(yaw),0,Math.cos(yaw)
+  // camera rotation
+  camera.rotation.set(pitch, yaw, 0, "YXZ");
+
+  // movement
+  const speed = keys["ShiftLeft"] ? 4 : 2;
+  const dir = new THREE.Vector3();
+
+  if(keys["KeyW"]) dir.z -= 1;
+  if(keys["KeyS"]) dir.z += 1;
+  if(keys["KeyA"]) dir.x -= 1;
+  if(keys["KeyD"]) dir.x += 1;
+
+  dir.normalize().applyEuler(camera.rotation);
+  camera.position.addScaledVector(dir, speed * dt);
+
+  // FLASHLIGHT FIX (this is the important part)
+  flashlight.position.copy(camera.position);
+  flashlight.target.position.set(
+    camera.position.x + Math.sin(yaw),
+    camera.position.y + Math.sin(pitch),
+    camera.position.z + Math.cos(yaw)
   );
-  const right = new THREE.Vector3(
-    Math.sin(yaw+Math.PI/2),0,Math.cos(yaw+Math.PI/2)
-  );
+  flashlight.target.updateMatrixWorld();
 
-  if(keys.KeyW) camera.position.addScaledVector(forward,-speed);
-  if(keys.KeyS) camera.position.addScaledVector(forward,speed);
-  if(keys.KeyA) camera.position.addScaledVector(right,-speed);
-  if(keys.KeyD) camera.position.addScaledVector(right,speed);
-
-  /* Flashlight target */
-  flashlight.target.position.set(0,0,-1).applyMatrix4(camera.matrixWorld);
-
-  /* Closet dragger logic */
-  const dist = camera.position.distanceTo(dragger.position);
-  if(dist<1.3 && !dragged){
-    dragged=true;
-    flashlight.visible=false;
-    setTimeout(()=>{
-      flashlight.visible=true;
-      dragged=false;
-    },1200);
-  }
-
-  /* Enemy patrol */
-  enemy.position.x += enemyDir*dt;
-  if(enemy.position.x>7 || enemy.position.x<3) enemyDir*=-1;
-
-  /* Enemy detection */
-  if(camera.position.distanceTo(enemy.position)<3){
-    camera.position.addScaledVector(forward,1.5);
-  }
-
-  /* Psychological room effect */
-  if(camera.position.distanceTo(psychRoom)<2){
-    camera.rotation.z = Math.sin(performance.now()*0.005)*0.02;
-  } else {
-    camera.rotation.z = 0;
-  }
-
-  renderer.render(scene,camera);
+  renderer.render(scene, camera);
 }
+
 animate();
 
-addEventListener("resize",()=>{
+/* ================= RESIZE ================= */
+
+window.addEventListener("resize", ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
 </script>
+
 </body>
 </html>
