@@ -14,43 +14,54 @@ html,body {
 }
 canvas { display:block; }
 
-#ui {
-  position:fixed;
-  top:20px;
-  left:20px;
-  color:#ccc;
-  background:rgba(0,0,0,0.6);
-  padding:10px 14px;
-  border-radius:4px;
-  z-index:10;
-  font-size:14px;
-}
-
 #overlay {
   position:fixed;
   inset:0;
   background:#000;
+  color:#ccc;
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-  flex-direction:column;
-  color:#aaa;
-  font-size:20px;
-  z-index:20;
+  z-index:10;
+}
+
+#lobby {
+  width:300px;
+  text-align:left;
+}
+
+.player {
+  display:flex;
+  justify-content:space-between;
+  margin:6px 0;
+  opacity:0.8;
+}
+
+.mic {
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#333;
+}
+
+.mic.talk {
+  background:#0f0;
+}
+
+#hint {
+  margin-top:20px;
+  font-size:14px;
+  opacity:0.6;
 }
 </style>
 </head>
 
 <body>
-
-<div id="ui">
-  <b id="mode">LOBBY</b><br>
-  <span id="status">Waiting for players…</span>
-</div>
-
 <div id="overlay">
-  <div>CLICK TO LOCK MOUSE</div>
-  <small style="opacity:.6">You only cross once.</small>
+  <h2>LOBBY</h2>
+  <div id="lobby"></div>
+  <div id="hint">Press ENTER to start</div>
 </div>
 
 <canvas id="c"></canvas>
@@ -61,158 +72,120 @@ canvas { display:block; }
 /* ================= BASIC SETUP ================= */
 const canvas = document.getElementById("c");
 const overlay = document.getElementById("overlay");
-const statusEl = document.getElementById("status");
-const modeEl = document.getElementById("mode");
+const lobbyEl = document.getElementById("lobby");
 
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+const renderer = new THREE.WebGLRenderer({ canvas });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
+renderer.setClearColor(0x000000);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x050505, 3, 20);
+scene.fog = new THREE.Fog(0x000000, 2, 20);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 50);
-camera.position.set(0,1.6,6);
-
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0,1.6,5);
 scene.add(camera);
 
-/* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0x222222,0.3));
+/* ================= LIGHT ================= */
+scene.add(new THREE.AmbientLight(0x404040,0.4));
 
-const flashlight = new THREE.SpotLight(0xffffff, 2, 12, Math.PI/6, 0.4, 1);
-flashlight.position.set(0,0,0);
-flashlight.target.position.set(0,0,-1);
+const flashlight = new THREE.SpotLight(0xffffff, 2, 10, Math.PI/7, 0.4);
 camera.add(flashlight);
 camera.add(flashlight.target);
+flashlight.position.set(0,0,0);
+flashlight.target.position.set(0,0,-1);
+
+/* ================= MAP ================= */
+const colliders = [];
+const wallMat = new THREE.MeshStandardMaterial({ color:0x1a1a1a });
+
+function wall(x,z,w,d){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,3,d), wallMat);
+  m.position.set(x,1.5,z);
+  scene.add(m);
+  colliders.push(m);
+}
+
+wall(0,-5,10,0.5);
+wall(0,5,10,0.5);
+wall(-5,0,0.5,10);
+wall(5,0,0.5,10);
+
+/* ================= LOBBY SIM ================= */
+const fakeNames = ["Alex","Jordan","Chris","Taylor","Morgan","Riley"];
+const lobbyPlayers = [];
+
+fakeNames.forEach(name=>{
+  const div = document.createElement("div");
+  div.className="player";
+  div.innerHTML = `<span>${name}</span><div class="mic"></div>`;
+  lobbyEl.appendChild(div);
+  lobbyPlayers.push(div);
+});
+
+setInterval(()=>{
+  lobbyPlayers.forEach(p=>{
+    p.querySelector(".mic").classList.toggle("talk", Math.random()<0.2);
+  });
+},400);
 
 /* ================= INPUT ================= */
-let keys = {};
-let yaw = 0, pitch = 0;
-let pointerLocked = false;
+let started=false;
+let keys={};
+let yaw=0, pitch=0;
 
-document.body.addEventListener("click", ()=>{
-  document.body.requestPointerLock();
+addEventListener("keydown",e=>{
+  keys[e.code]=true;
+  if(e.code==="Enter" && !started){
+    started=true;
+    overlay.style.display="none";
+    canvas.requestPointerLock();
+  }
 });
+addEventListener("keyup",e=>keys[e.code]=false);
 
-document.addEventListener("pointerlockchange", ()=>{
-  pointerLocked = document.pointerLockElement === document.body;
-  overlay.style.display = pointerLocked ? "none" : "flex";
-});
-
-addEventListener("mousemove", e=>{
-  if(!pointerLocked) return;
-  yaw -= e.movementX * 0.002;
+addEventListener("mousemove",e=>{
+  if(!started) return;
+  yaw -= e.movementX * 0.002;   // FIXED (not inverted)
   pitch -= e.movementY * 0.002;
-  pitch = Math.max(-1.4, Math.min(1.4, pitch));
-  camera.rotation.set(pitch, yaw, 0);
+  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2,pitch));
+  camera.rotation.set(pitch,yaw,0);
 });
 
-addEventListener("keydown", e=>keys[e.code]=true);
-addEventListener("keyup", e=>keys[e.code]=false);
-
-/* ================= LOBBY FAKE PLAYERS ================= */
-let fakePlayers = [];
-let inLobby = true;
-let lobbyStart = performance.now();
-
-function createFakePlayer(x,z){
-  const m = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.25,1),
-    new THREE.MeshStandardMaterial({color:0x555555})
-  );
-  m.position.set(x,1,z);
-  scene.add(m);
-  fakePlayers.push(m);
-}
-
-for(let i=0;i<6;i++){
-  createFakePlayer(
-    (Math.random()-0.5)*4,
-    (Math.random()-0.5)*4
-  );
-}
-
-/* ================= ENVIRONMENT ================= */
-const walls = [];
-
-function wall(w,h,d,x,y,z){
-  const m = new THREE.Mesh(
-    new THREE.BoxGeometry(w,h,d),
-    new THREE.MeshStandardMaterial({color:0x1a1a1a})
-  );
-  m.position.set(x,y,z);
-  scene.add(m);
-  walls.push(m);
-}
-
-wall(10,4,0.5,0,2,-5);
-wall(0.5,4,10,-5,2,0);
-wall(0.5,4,10,5,2,0);
-wall(10,4,0.5,0,2,5);
-
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(10,10),
-  new THREE.MeshStandardMaterial({color:0x111111})
-);
-floor.rotation.x = -Math.PI/2;
-scene.add(floor);
-
-/* ================= COLLISION ================= */
-function collides(pos){
-  for(const w of walls){
-    const b = new THREE.Box3().setFromObject(w);
+/* ================= MOVEMENT + COLLISION ================= */
+function collide(pos){
+  for(const c of colliders){
+    const b = new THREE.Box3().setFromObject(c);
     if(b.containsPoint(pos)) return true;
   }
   return false;
 }
 
-/* ================= GAME LOOP ================= */
 const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  /* LOBBY BEHAVIOR */
-  if(inLobby){
-    statusEl.textContent = "Players connected: " + fakePlayers.length;
-    fakePlayers.forEach((p,i)=>{
-      p.position.x += Math.sin(performance.now()*0.001+i)*0.001;
-    });
+  if(started){
+    const dir = new THREE.Vector3();
+    if(keys.KeyW) dir.z-=1;
+    if(keys.KeyS) dir.z+=1;
+    if(keys.KeyA) dir.x-=1;
+    if(keys.KeyD) dir.x+=1;
 
-    if(performance.now() - lobbyStart > 6000){
-      inLobby = false;
-      modeEl.textContent = "GAME";
-      statusEl.textContent = "Stay together.";
-      fakePlayers.forEach(p=>scene.remove(p));
-      fakePlayers=[];
-      camera.position.set(0,1.6,3);
-    }
+    dir.normalize().applyEuler(camera.rotation).multiplyScalar(dt*3);
+
+    const next = camera.position.clone().add(dir);
+    if(!collide(next)) camera.position.copy(next);
   }
-
-  /* MOVEMENT */
-  const speed = keys["ShiftLeft"] ? 4 : 2;
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  dir.y=0; dir.normalize();
-  const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0,1,0));
-
-  let nextPos = camera.position.clone();
-  if(keys["KeyW"]) nextPos.add(dir.clone().multiplyScalar(speed*dt));
-  if(keys["KeyS"]) nextPos.add(dir.clone().multiplyScalar(-speed*dt));
-  if(keys["KeyA"]) nextPos.add(right.clone().multiplyScalar(speed*dt));
-  if(keys["KeyD"]) nextPos.add(right.clone().multiplyScalar(-speed*dt));
-
-  if(!collides(nextPos)) camera.position.copy(nextPos);
 
   renderer.render(scene,camera);
 }
-
 animate();
 
-/* ================= RESIZE ================= */
 addEventListener("resize",()=>{
-  camera.aspect = innerWidth/innerHeight;
+  camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
