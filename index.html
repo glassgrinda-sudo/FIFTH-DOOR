@@ -1,20 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>FIFTH DOOR</title>
 <style>
-html,body {
-  margin:0;
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:#000;
-}
+html,body { margin:0; padding:0; overflow:hidden; background:#000; }
 canvas { display:block; }
+
+#ui {
+  position:fixed;
+  top:10px; left:10px;
+  color:#ddd;
+  font-family:monospace;
+  font-size:14px;
+  z-index:10;
+}
+#hint {
+  position:fixed;
+  bottom:10px;
+  width:100%;
+  text-align:center;
+  color:#888;
+  font-family:monospace;
+  font-size:12px;
+}
 </style>
 </head>
 <body>
+
+<div id="ui">
+<b>FIFTH DOOR</b><br>
+WASD move · Mouse look · F flashlight · Shift sprint · Esc unlock
+</div>
+<div id="hint">Click to lock mouse</div>
+
 <canvas id="c"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
@@ -22,115 +41,102 @@ canvas { display:block; }
 <script>
 /* ================= BASIC SETUP ================= */
 const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+const renderer = new THREE.WebGLRenderer({ canvas });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setClearColor(0x000000,1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 2, 15);
+scene.background = new THREE.Color(0x050505);
+scene.fog = new THREE.Fog(0x050505, 5, 25);
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 50);
-camera.position.set(0,1.6,6);
-scene.add(camera);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0,1.6,5);
 
 /* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0x222222,0.4));
+scene.add(new THREE.AmbientLight(0x222222));
 
-const flashlight = new THREE.SpotLight(0xffffff, 2, 10, Math.PI/7, 0.5);
-camera.add(flashlight);
-camera.add(flashlight.target);
+const flashlight = new THREE.SpotLight(0xffffff, 2, 15, Math.PI/7, 0.5);
 flashlight.position.set(0,0,0);
 flashlight.target.position.set(0,0,-1);
+camera.add(flashlight);
+camera.add(flashlight.target);
+scene.add(camera);
+
+let flashlightOn = true;
 
 /* ================= ENVIRONMENT ================= */
-const solidWalls = [];
+const wallMat = new THREE.MeshStandardMaterial({ color:0x1a1a1a });
+const floorMat = new THREE.MeshStandardMaterial({ color:0x101010 });
+
+const colliders = [];
 
 function wall(w,h,d,x,y,z){
-  const m = new THREE.Mesh(
-    new THREE.BoxGeometry(w,h,d),
-    new THREE.MeshStandardMaterial({ color:0x1a1a1a })
-  );
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
   m.position.set(x,y,z);
   scene.add(m);
-  solidWalls.push(m);
+  colliders.push(m);
+}
+function floor(w,d,x,z){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,0.1,d), floorMat);
+  m.position.set(x,0,z);
+  scene.add(m);
+  colliders.push(m);
 }
 
-wall(12,4,0.5,0,2,-4);
-wall(0.5,4,12,-6,2,-4);
-wall(0.5,4,12,6,2,-4);
+floor(20,20,0,0);
+wall(20,4,0.5,0,2,-10);
+wall(20,4,0.5,0,2,10);
+wall(0.5,4,20,-10,2,0);
+wall(0.5,4,20,10,2,0);
 
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(12,12),
-  new THREE.MeshStandardMaterial({ color:0x111111 })
+/* Room with hallucination */
+const psychoRoom = new THREE.Box3(
+  new THREE.Vector3(-3,0,-3),
+  new THREE.Vector3(3,4,3)
 );
-floor.rotation.x = -Math.PI/2;
-scene.add(floor);
 
-/* ================= INPUT ================= */
-const keys = {};
-addEventListener("keydown", e => keys[e.code] = true);
-addEventListener("keyup", e => keys[e.code] = false);
+/* ================= PLAYER CONTROLS ================= */
+let yaw = 0, pitch = 0;
+let keys = {};
+let velocity = new THREE.Vector3();
 
-canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-canvas.onclick = () => canvas.requestPointerLock();
+document.body.addEventListener("click",()=>canvas.requestPointerLock());
 
-let yaw = 0;
-let pitch = 0;
-
-addEventListener("mousemove", e => {
-  if (document.pointerLockElement !== canvas) return;
-
-  // ✅ FIXED INVERSION
+addEventListener("mousemove",e=>{
+  if(document.pointerLockElement!==canvas) return;
   yaw   -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
-  pitch = Math.max(-1.5, Math.min(1.5, pitch));
-
-  camera.rotation.set(pitch, yaw, 0);
+  pitch = Math.max(-1.4,Math.min(1.4,pitch));
+  camera.rotation.set(pitch,yaw,0,"YXZ");
 });
 
-/* ================= MOVEMENT + COLLISION ================= */
-const velocity = new THREE.Vector3();
-
-function canMove(pos){
-  for (const w of solidWalls){
-    if (pos.distanceTo(w.position) < 1) return false;
+addEventListener("keydown",e=>{
+  keys[e.code]=true;
+  if(e.code==="KeyF"){
+    flashlightOn=!flashlightOn;
+    flashlight.intensity = flashlightOn?2:0;
   }
-  return true;
+});
+addEventListener("keyup",e=>keys[e.code]=false);
+
+/* ================= COLLISION ================= */
+function collide(pos){
+  for(const c of colliders){
+    if(new THREE.Box3().setFromObject(c).containsPoint(pos)){
+      return true;
+    }
+  }
+  return false;
 }
 
 /* ================= CLOSET DRAGGER ================= */
-const draggers = [];
+const dragger = {
+  position:new THREE.Vector3(2,0,2),
+  active:true,
+  cooldown:0
+};
 
-function spawnDragger(x,z){
-  const d = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.3,1.2),
-    new THREE.MeshStandardMaterial({ color:0x330000 })
-  );
-  d.position.set(x,1,z);
-  scene.add(d);
-  draggers.push({
-    mesh:d,
-    dir:Math.random()*Math.PI*2,
-    cooldown:0
-  });
-}
-
-spawnDragger(-2,-2);
-spawnDragger(2,-6);
-
-/* ================= AUDIO ================= */
-const listener = new THREE.AudioListener();
-camera.add(listener);
-const dragSound = new THREE.Audio(listener);
-new THREE.AudioLoader().load("drag.mp3", b=>{
-  dragSound.setBuffer(b);
-  dragSound.setVolume(1);
-});
-
-/* ================= DRAG STATE ================= */
-let dragged = false;
-let dragTime = 0;
+let blackout = 0;
 
 /* ================= LOOP ================= */
 const clock = new THREE.Clock();
@@ -139,53 +145,49 @@ function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  if (!dragged){
-    const speed = keys["ShiftLeft"] ? 4 : 2;
-    velocity.set(0,0,0);
+  /* Movement */
+  let speed = keys.ShiftLeft?4:2;
+  velocity.set(0,0,0);
+  if(keys.KeyW) velocity.z -= speed*dt;
+  if(keys.KeyS) velocity.z += speed*dt;
+  if(keys.KeyA) velocity.x -= speed*dt;
+  if(keys.KeyD) velocity.x += speed*dt;
 
-    if (keys["KeyW"]) velocity.z -= speed * dt;
-    if (keys["KeyS"]) velocity.z += speed * dt;
-    if (keys["KeyA"]) velocity.x -= speed * dt;
-    if (keys["KeyD"]) velocity.x += speed * dt;
+  velocity.applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
 
-    velocity.applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
-    const nextPos = camera.position.clone().add(velocity);
-    if (canMove(nextPos)) camera.position.copy(nextPos);
+  const nextPos = camera.position.clone().add(velocity);
+  if(!collide(nextPos)) camera.position.copy(nextPos);
+
+  /* Hallucination room */
+  if(psychoRoom.containsPoint(camera.position)){
+    camera.fov = 75 + Math.sin(performance.now()*0.004)*4;
+    camera.updateProjectionMatrix();
+  } else {
+    camera.fov = 75;
+    camera.updateProjectionMatrix();
   }
 
-  /* === DRAGGER AI === */
-  draggers.forEach(d=>{
-    d.cooldown -= dt;
-    d.mesh.position.x += Math.cos(d.dir)*dt*0.5;
-    d.mesh.position.z += Math.sin(d.dir)*dt*0.5;
-
-    if (Math.random()<0.01) d.dir += (Math.random()-0.5);
-
-    const dist = d.mesh.position.distanceTo(camera.position);
-    if (dist < 1.2 && !dragged && d.cooldown <= 0){
-      dragged = true;
-      dragTime = performance.now();
-      d.cooldown = 5;
-      flashlight.intensity = 0;
-      if (dragSound.buffer) dragSound.play();
+  /* Closet dragger */
+  if(dragger.active && dragger.cooldown<performance.now()){
+    if(camera.position.distanceTo(dragger.position)<1.2){
+      blackout = performance.now()+800;
+      dragger.cooldown = performance.now()+5000;
+      camera.position.set(-5,1.6,-5);
     }
-  });
+  }
 
-  if (dragged){
-    camera.position.x += Math.sin(performance.now()*0.02)*0.05;
-    if (performance.now() - dragTime > 1200){
-      dragged = false;
-      flashlight.intensity = 2;
-    }
+  if(blackout>performance.now()){
+    renderer.setClearColor(0x000000);
+  } else {
+    renderer.setClearColor(0x050505);
   }
 
   renderer.render(scene,camera);
 }
 animate();
 
-/* ================= RESIZE ================= */
-addEventListener("resize", ()=>{
-  camera.aspect = innerWidth/innerHeight;
+addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
