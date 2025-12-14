@@ -1,32 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>FIFTH DOOR</title>
 <style>
-html,body { margin:0; overflow:hidden; background:#000; }
+html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
 canvas { display:block; }
-#hud {
-  position:fixed;
+#ui {
+  position:absolute;
   top:10px; left:10px;
-  color:#ccc; font-family:monospace;
-  z-index:10; font-size:14px;
-}
-#hint {
-  position:fixed;
-  bottom:12px; width:100%;
-  text-align:center;
-  color:#777; font-family:monospace;
+  color:#ddd;
+  font-family:monospace;
+  font-size:13px;
+  z-index:10;
 }
 </style>
 </head>
 <body>
 
-<div id="hud">
+<div id="ui">
 <b>FIFTH DOOR</b><br>
-WASD move · Mouse look · F flashlight · E door · Esc unlock
+WASD move · Mouse look · F flashlight · E open door
 </div>
-<div id="hint">Click to lock mouse</div>
 
 <canvas id="c"></canvas>
 
@@ -40,160 +35,148 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
 scene.fog = new THREE.Fog(0x000000, 2, 18);
 
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
 camera.position.set(0,1.6,6);
-
-/* ================= LIGHT ================= */
-scene.add(new THREE.AmbientLight(0x222222,0.3));
-
-const flashlight = new THREE.SpotLight(0xffffff, 2, 12, Math.PI/6, 0.4);
-flashlight.visible = true;
-camera.add(flashlight);
-camera.add(flashlight.target);
 scene.add(camera);
 
+/* ================= LIGHTING ================= */
+scene.add(new THREE.AmbientLight(0x222222,0.4));
+
+const flashlight = new THREE.SpotLight(0xffffff, 2, 12, Math.PI/6, 0.4);
+flashlight.position.set(0,0,0);
+flashlight.target.position.set(0,0,-1);
+camera.add(flashlight);
+camera.add(flashlight.target);
+
 /* ================= CONTROLS ================= */
+let keys = {};
 let yaw = 0, pitch = 0;
-let locked = false;
-const keys = {};
-const PLAYER_RADIUS = 0.35;
+const speed = 4;
+const clock = new THREE.Clock();
+let flashlightOn = true;
 
-canvas.addEventListener("click",()=>{
-  canvas.requestPointerLock();
-});
-document.addEventListener("pointerlockchange",()=>{
-  locked = document.pointerLockElement === canvas;
+addEventListener("keydown", e=>{
+  keys[e.code]=true;
+  if(e.code==="KeyF"){
+    flashlightOn = !flashlightOn;
+    flashlight.intensity = flashlightOn ? 2 : 0;
+  }
 });
 
-document.addEventListener("mousemove",e=>{
-  if(!locked) return;
+addEventListener("keyup", e=>keys[e.code]=false);
+
+/* Pointer lock */
+canvas.addEventListener("click",()=>canvas.requestPointerLock());
+addEventListener("mousemove",e=>{
+  if(document.pointerLockElement!==canvas) return;
   yaw -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
-  pitch = Math.max(-1.4, Math.min(1.4, pitch));
+  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
   camera.rotation.set(pitch, yaw, 0);
 });
 
-document.addEventListener("keydown",e=>keys[e.code]=true);
-document.addEventListener("keyup",e=>keys[e.code]=false);
-
 /* ================= WORLD ================= */
-const colliders = [];
+const walls = [];
 const doors = [];
 
-function addCollider(mesh){
-  mesh.updateMatrixWorld();
-  const box = new THREE.Box3().setFromObject(mesh);
-  colliders.push({ mesh, box, solid:true });
-}
+const wallMat = new THREE.MeshStandardMaterial({ color:0x1b1b1b, roughness:0.9 });
+const floorMat = new THREE.MeshStandardMaterial({ color:0x111111, roughness:1 });
 
 function wall(w,h,d,x,y,z){
-  const m = new THREE.Mesh(
-    new THREE.BoxGeometry(w,h,d),
-    new THREE.MeshStandardMaterial({ color:0x111111, roughness:0.95 })
-  );
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
   m.position.set(x,y,z);
   scene.add(m);
-  addCollider(m);
+  walls.push(m);
 }
 
-function door(x,z){
-  const m = new THREE.Mesh(
-    new THREE.BoxGeometry(1,2.4,0.15),
-    new THREE.MeshStandardMaterial({ color:0x4a0e0e })
-  );
-  m.position.set(x,1.2,z);
-  m.userData.open=false;
-  scene.add(m);
+/* Room */
+wall(8,3,0.3,0,1.5,2);
+wall(8,3,0.3,0,1.5,-6);
+wall(0.3,3,8,-4,1.5,-2);
+wall(0.3,3,8,4,1.5,-2);
 
-  const box = new THREE.Box3().setFromObject(m);
-  doors.push({ mesh:m, box, solid:true });
-  colliders.push(doors[doors.length-1]);
-}
-
-/* ================= MAP ================= */
-// Floor
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(20,20),
-  new THREE.MeshStandardMaterial({ color:0x080808 })
-);
+/* Floor */
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(8,8), floorMat);
 floor.rotation.x = -Math.PI/2;
+floor.position.set(0,0,-2);
 scene.add(floor);
 
-// Room
-wall(20,3,0.3,0,1.5,-10);
-wall(20,3,0.3,0,1.5,10);
-wall(0.3,3,20,-10,1.5,0);
-wall(0.3,3,20,10,1.5,0);
-
-// Door opening
-wall(4,3,0.3,-4,1.5,-4);
-wall(4,3,0.3,4,1.5,-4);
-door(0,-4);
+/* ================= DOOR WITH COLLISION ================= */
+const door = new THREE.Mesh(
+  new THREE.BoxGeometry(1.2,2.2,0.15),
+  new THREE.MeshStandardMaterial({ color:0x5a1010 })
+);
+door.position.set(0,1.1,2);
+door.userData.open = false;
+scene.add(door);
+doors.push(door);
 
 /* ================= COLLISION ================= */
-function blocked(pos){
-  for(const c of colliders){
-    if(!c.solid) continue;
-    c.box.setFromObject(c.mesh);
-    if(c.box.distanceToPoint(pos) < PLAYER_RADIUS) return true;
+const playerRadius = 0.35;
+
+function collides(pos){
+  const box = new THREE.Box3();
+  for(const w of walls){
+    box.setFromObject(w);
+    if(box.distanceToPoint(pos) < playerRadius) return true;
+  }
+  for(const d of doors){
+    if(!d.userData.open){
+      box.setFromObject(d);
+      if(box.distanceToPoint(pos) < playerRadius) return true;
+    }
   }
   return false;
 }
 
-/* ================= GAME LOOP ================= */
-const clock = new THREE.Clock();
+/* Door interaction */
+addEventListener("keydown",e=>{
+  if(e.code==="KeyE"){
+    const dist = camera.position.distanceTo(door.position);
+    if(dist<2){
+      door.rotation.y = door.userData.open ? 0 : -Math.PI/2;
+      door.userData.open = !door.userData.open;
+    }
+  }
+});
 
+/* ================= LOOP ================= */
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
-  const speed = keys.ShiftLeft ? 5 : 3;
 
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
-  dir.y = 0; dir.normalize();
+  dir.y=0;
+  dir.normalize();
+  const right = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
 
-  const right = new THREE.Vector3().crossVectors(dir,new THREE.Vector3(0,1,0)).normalize();
+  const move = new THREE.Vector3();
+  if(keys["KeyW"]) move.add(dir);
+  if(keys["KeyS"]) move.sub(dir);
+  if(keys["KeyA"]) move.add(right);
+  if(keys["KeyD"]) move.sub(right);
 
-  let move = new THREE.Vector3();
-  if(keys.KeyW) move.add(dir);
-  if(keys.KeyS) move.sub(dir);
-  if(keys.KeyA) move.sub(right);
-  if(keys.KeyD) move.add(right);
-
-  if(move.length()>0){
+  if(move.length()){
     move.normalize().multiplyScalar(speed*dt);
     const next = camera.position.clone().add(move);
-    if(!blocked(next)) camera.position.copy(next);
-  }
-
-  // Flashlight
-  if(keys.KeyF){
-    flashlight.visible = !flashlight.visible;
-    keys.KeyF=false;
-  }
-
-  // Doors
-  if(keys.KeyE){
-    for(const d of doors){
-      if(camera.position.distanceTo(d.mesh.position)<1.8){
-        d.mesh.rotation.y = Math.PI/2;
-        d.solid=false;
-      }
-    }
-    keys.KeyE=false;
+    if(!collides(next)) camera.position.copy(next);
   }
 
   renderer.render(scene,camera);
 }
 animate();
 
+/* ================= RESIZE ================= */
 addEventListener("resize",()=>{
-  camera.aspect=innerWidth/innerHeight;
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
 </script>
+
 </body>
 </html>
