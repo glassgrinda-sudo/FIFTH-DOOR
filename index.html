@@ -15,21 +15,20 @@ html,body {
 }
 canvas { display:block; }
 
-#hud {
+#ui {
   position:fixed;
-  top:10px; left:10px;
-  color:#fff;
+  top:14px;
+  left:14px;
+  color:#ddd;
   font-size:13px;
-  opacity:0.85;
-  z-index:5;
+  z-index:10;
 }
-
 #hint {
   position:fixed;
-  bottom:10px;
+  bottom:14px;
   width:100%;
   text-align:center;
-  color:#aaa;
+  color:#888;
   font-size:12px;
 }
 </style>
@@ -37,11 +36,10 @@ canvas { display:block; }
 
 <body>
 
-<div id="hud">
-<b>FIFTH DOOR</b><br>
-WASD move · Mouse look · F flashlight · Shift sprint · Esc unlock
+<div id="ui">
+  <b>FIFTH DOOR</b><br>
+  WASD move · Mouse look · F flashlight · Shift sprint · Esc unlock
 </div>
-
 <div id="hint">Click to lock mouse</div>
 
 <canvas id="c"></canvas>
@@ -54,31 +52,34 @@ const canvas = document.getElementById("c");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setClearColor(0x050505, 1);
+renderer.setClearColor(0x050505);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x050505, 0.045);
+scene.fog = new THREE.FogExp2(0x050505, 0.08);
 
+/* ================= CAMERA ================= */
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
 camera.position.set(0,1.6,5);
 scene.add(camera);
 
 /* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0x222222, 0.35));
+scene.add(new THREE.AmbientLight(0x222222, 0.4));
 
-/* FLASHLIGHT — CORRECT IMPLEMENTATION */
-const flashlight = new THREE.SpotLight(0xffffff, 3.2, 18, Math.PI/7, 0.35, 1);
+const flashlight = new THREE.SpotLight(
+  0xffffff,
+  2.2,
+  18,
+  Math.PI/6,
+  0.4,
+  1
+);
 flashlight.position.set(0,0,0);
+flashlight.target.position.set(0,0,-1);
 camera.add(flashlight);
+camera.add(flashlight.target);
+flashlight.visible = false;
 
-const flashlightTarget = new THREE.Object3D();
-flashlightTarget.position.set(0,0,-1);
-camera.add(flashlightTarget);
-flashlight.target = flashlightTarget;
-
-let flashlightOn = true;
-
-/* ================= ENVIRONMENT ================= */
+/* ================= WORLD ================= */
 const wallMat = new THREE.MeshStandardMaterial({ color:0x1a1a1a, roughness:0.95 });
 const floorMat = new THREE.MeshStandardMaterial({ color:0x111111, roughness:1 });
 
@@ -89,73 +90,79 @@ function wall(w,h,x,y,z,ry=0){
   scene.add(m);
 }
 
-wall(20,4,0,2,-10);
-wall(20,4,-10,2,0,Math.PI/2);
-wall(20,4,10,2,0,-Math.PI/2);
+wall(12,4, 0,2,-6);
+wall(12,4,-6,2, 0, Math.PI/2);
+wall(12,4, 6,2, 0,-Math.PI/2);
 
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(20,20), floorMat);
 floor.rotation.x = -Math.PI/2;
 scene.add(floor);
 
-/* ================= FAKE PLAYER (TEST) ================= */
-const fakePlayer = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.3,1.0,6,12),
-  new THREE.MeshStandardMaterial({ color:0x552222 })
-);
-fakePlayer.position.set(2,1,-3);
-scene.add(fakePlayer);
+/* ================= INPUT ================= */
+let locked = false;
+let pitch = 0;
+let yaw = 0;
 
-/* ================= CONTROLS ================= */
-let keys = {};
-let yaw = 0, pitch = 0;
-let mouseLocked = false;
+const keys = {};
+addEventListener("keydown", e => keys[e.code] = true);
+addEventListener("keyup", e => keys[e.code] = false);
 
-addEventListener("keydown", e=>{
-  keys[e.code]=true;
-
-  if(e.code==="KeyF"){
-    flashlightOn = !flashlightOn;
-    flashlight.intensity = flashlightOn ? 3.2 : 0;
-  }
-});
-
-addEventListener("keyup", e=> keys[e.code]=false);
-
-canvas.addEventListener("click", ()=>{
+canvas.addEventListener("click", () => {
   canvas.requestPointerLock();
 });
 
-addEventListener("pointerlockchange", ()=>{
-  mouseLocked = document.pointerLockElement === canvas;
+addEventListener("pointerlockchange", () => {
+  locked = document.pointerLockElement === canvas;
+  document.getElementById("hint").style.display = locked ? "none" : "block";
 });
 
-addEventListener("mousemove", e=>{
-  if(!mouseLocked) return;
-  yaw -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch = Math.max(-1.5, Math.min(1.5, pitch));
+addEventListener("mousemove", e => {
+  if (!locked) return;
+
+  const sensitivity = 0.002;
+  yaw   -= e.movementX * sensitivity;
+  pitch -= e.movementY * sensitivity;
+
+  pitch = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, pitch));
+
+  camera.rotation.set(pitch, yaw, 0);
 });
 
-/* ================= GAME LOOP ================= */
+addEventListener("keydown", e => {
+  if (e.code === "KeyF") {
+    flashlight.visible = !flashlight.visible;
+  }
+  if (e.code === "Escape") {
+    document.exitPointerLock();
+  }
+});
+
+/* ================= MOVEMENT ================= */
+const velocity = new THREE.Vector3();
+
+function updateMovement(dt){
+  const speed = keys["ShiftLeft"] ? 5 : 2.5;
+
+  velocity.set(0,0,0);
+
+  if (keys["KeyW"]) velocity.z -= 1;
+  if (keys["KeyS"]) velocity.z += 1;
+  if (keys["KeyA"]) velocity.x -= 1;
+  if (keys["KeyD"]) velocity.x += 1;
+
+  velocity.normalize().multiplyScalar(speed * dt);
+  velocity.applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
+
+  camera.position.add(velocity);
+}
+
+/* ================= LOOP ================= */
 const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
-
-  camera.rotation.set(pitch, yaw, 0);
-
-  let speed = keys["ShiftLeft"] ? 5 : 2.5;
-  const dir = new THREE.Vector3();
-
-  if(keys["KeyW"]) dir.z -= 1;
-  if(keys["KeyS"]) dir.z += 1;
-  if(keys["KeyA"]) dir.x -= 1;
-  if(keys["KeyD"]) dir.x += 1;
-
-  dir.normalize().applyEuler(camera.rotation);
-  camera.position.addScaledVector(dir, speed * dt);
-
+  if (locked) updateMovement(dt);
   renderer.render(scene, camera);
 }
 animate();
@@ -164,7 +171,7 @@ animate();
 addEventListener("resize", ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(innerWidth,innerHeight);
 });
 </script>
 
