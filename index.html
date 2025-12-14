@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>FIFTH DOOR</title>
 
 <style>
@@ -11,17 +11,17 @@ html,body {
   height:100%;
   overflow:hidden;
   background:#000;
-  font-family:Arial, sans-serif;
+  font-family:monospace;
 }
+canvas { display:block; }
 
-#ui {
+#hud {
   position:fixed;
-  top:10px;
-  left:10px;
-  color:#eee;
+  top:10px; left:10px;
+  color:#fff;
   font-size:13px;
-  z-index:10;
   opacity:0.85;
+  z-index:5;
 }
 
 #hint {
@@ -31,138 +31,121 @@ html,body {
   text-align:center;
   color:#aaa;
   font-size:12px;
-  opacity:0.7;
 }
 </style>
 </head>
 
 <body>
 
-<div id="ui">
+<div id="hud">
 <b>FIFTH DOOR</b><br>
 WASD move · Mouse look · F flashlight · Shift sprint · Esc unlock
 </div>
 
 <div id="hint">Click to lock mouse</div>
 
+<canvas id="c"></canvas>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 
 <script>
-/* ================= BASIC SETUP ================= */
+/* ================= SETUP ================= */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setClearColor(0x050505, 1);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x050505);
-scene.fog = new THREE.Fog(0x050505, 2, 18);
+scene.fog = new THREE.FogExp2(0x050505, 0.045);
 
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  50
-);
-camera.position.set(0, 1.6, 5);
-
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(devicePixelRatio);
-document.body.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0,1.6,5);
+scene.add(camera);
 
 /* ================= LIGHTING ================= */
+scene.add(new THREE.AmbientLight(0x222222, 0.35));
 
-// soft ambient so nothing is pure black
-scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+/* FLASHLIGHT — CORRECT IMPLEMENTATION */
+const flashlight = new THREE.SpotLight(0xffffff, 3.2, 18, Math.PI/7, 0.35, 1);
+flashlight.position.set(0,0,0);
+camera.add(flashlight);
 
-// FLASHLIGHT
-const flashlight = new THREE.SpotLight(
-  0xffffff,
-  2.5,
-  20,
-  Math.PI / 5,
-  0.35,
-  1
-);
-flashlight.castShadow = false;
-scene.add(flashlight);
-scene.add(flashlight.target);
+const flashlightTarget = new THREE.Object3D();
+flashlightTarget.position.set(0,0,-1);
+camera.add(flashlightTarget);
+flashlight.target = flashlightTarget;
+
+let flashlightOn = true;
 
 /* ================= ENVIRONMENT ================= */
-
-const wallMat = new THREE.MeshStandardMaterial({
-  color:0x1a1a1a,
-  roughness:0.95
-});
+const wallMat = new THREE.MeshStandardMaterial({ color:0x1a1a1a, roughness:0.95 });
+const floorMat = new THREE.MeshStandardMaterial({ color:0x111111, roughness:1 });
 
 function wall(w,h,x,y,z,ry=0){
-  const m = new THREE.Mesh(
-    new THREE.PlaneGeometry(w,h),
-    wallMat
-  );
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), wallMat);
   m.position.set(x,y,z);
   m.rotation.y = ry;
   scene.add(m);
 }
 
-// simple corridor room
-wall(10,4,0,2,-5);
-wall(10,4,0,2,5,Math.PI);
-wall(10,4,-5,2,0,Math.PI/2);
-wall(10,4,5,2,0,-Math.PI/2);
+wall(20,4,0,2,-10);
+wall(20,4,-10,2,0,Math.PI/2);
+wall(20,4,10,2,0,-Math.PI/2);
 
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(10,10),
-  new THREE.MeshStandardMaterial({ color:0x111111 })
-);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20,20), floorMat);
 floor.rotation.x = -Math.PI/2;
 scene.add(floor);
 
+/* ================= FAKE PLAYER (TEST) ================= */
+const fakePlayer = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.3,1.0,6,12),
+  new THREE.MeshStandardMaterial({ color:0x552222 })
+);
+fakePlayer.position.set(2,1,-3);
+scene.add(fakePlayer);
+
 /* ================= CONTROLS ================= */
+let keys = {};
+let yaw = 0, pitch = 0;
+let mouseLocked = false;
 
-let locked = false;
-let flashlightOn = true;
+addEventListener("keydown", e=>{
+  keys[e.code]=true;
 
-const keys = {};
-document.addEventListener("keydown", e => {
-  keys[e.code] = true;
-
-  if(e.code === "KeyF"){
+  if(e.code==="KeyF"){
     flashlightOn = !flashlightOn;
-    flashlight.intensity = flashlightOn ? 2.5 : 0;
+    flashlight.intensity = flashlightOn ? 3.2 : 0;
   }
 });
-document.addEventListener("keyup", e => keys[e.code] = false);
 
-document.body.addEventListener("click", () => {
-  renderer.domElement.requestPointerLock();
+addEventListener("keyup", e=> keys[e.code]=false);
+
+canvas.addEventListener("click", ()=>{
+  canvas.requestPointerLock();
 });
 
-document.addEventListener("pointerlockchange", () => {
-  locked = document.pointerLockElement === renderer.domElement;
-  document.getElementById("hint").style.display = locked ? "none" : "block";
+addEventListener("pointerlockchange", ()=>{
+  mouseLocked = document.pointerLockElement === canvas;
 });
 
-let yaw = 0;
-let pitch = 0;
-
-document.addEventListener("mousemove", e => {
-  if(!locked) return;
+addEventListener("mousemove", e=>{
+  if(!mouseLocked) return;
   yaw -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
   pitch = Math.max(-1.5, Math.min(1.5, pitch));
 });
 
-/* ================= LOOP ================= */
-
+/* ================= GAME LOOP ================= */
 const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  // camera rotation
-  camera.rotation.set(pitch, yaw, 0, "YXZ");
+  camera.rotation.set(pitch, yaw, 0);
 
-  // movement
-  const speed = keys["ShiftLeft"] ? 4 : 2;
+  let speed = keys["ShiftLeft"] ? 5 : 2.5;
   const dir = new THREE.Vector3();
 
   if(keys["KeyW"]) dir.z -= 1;
@@ -173,26 +156,15 @@ function animate(){
   dir.normalize().applyEuler(camera.rotation);
   camera.position.addScaledVector(dir, speed * dt);
 
-  // FLASHLIGHT FIX (this is the important part)
-  flashlight.position.copy(camera.position);
-  flashlight.target.position.set(
-    camera.position.x + Math.sin(yaw),
-    camera.position.y + Math.sin(pitch),
-    camera.position.z + Math.cos(yaw)
-  );
-  flashlight.target.updateMatrixWorld();
-
   renderer.render(scene, camera);
 }
-
 animate();
 
 /* ================= RESIZE ================= */
-
-window.addEventListener("resize", ()=>{
+addEventListener("resize", ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
+  renderer.setSize(innerWidth, innerHeight);
 });
 </script>
 
