@@ -10,60 +10,11 @@ html,body {
   height:100%;
   overflow:hidden;
   background:#000;
-  font-family:Arial, sans-serif;
 }
 canvas { display:block; }
-
-#overlay {
-  position:fixed;
-  inset:0;
-  background:#000;
-  color:#ccc;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  z-index:10;
-}
-
-#lobby {
-  width:300px;
-  text-align:left;
-}
-
-.player {
-  display:flex;
-  justify-content:space-between;
-  margin:6px 0;
-  opacity:0.8;
-}
-
-.mic {
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  background:#333;
-}
-
-.mic.talk {
-  background:#0f0;
-}
-
-#hint {
-  margin-top:20px;
-  font-size:14px;
-  opacity:0.6;
-}
 </style>
 </head>
-
 <body>
-<div id="overlay">
-  <h2>LOBBY</h2>
-  <div id="lobby"></div>
-  <div id="hint">Press ENTER to start</div>
-</div>
-
 <canvas id="c"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
@@ -71,121 +22,170 @@ canvas { display:block; }
 <script>
 /* ================= BASIC SETUP ================= */
 const canvas = document.getElementById("c");
-const overlay = document.getElementById("overlay");
-const lobbyEl = document.getElementById("lobby");
-
-const renderer = new THREE.WebGLRenderer({ canvas });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setClearColor(0x000000);
+renderer.setClearColor(0x000000,1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 2, 20);
+scene.fog = new THREE.Fog(0x000000, 2, 15);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0,1.6,5);
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 50);
+camera.position.set(0,1.6,6);
 scene.add(camera);
 
-/* ================= LIGHT ================= */
-scene.add(new THREE.AmbientLight(0x404040,0.4));
+/* ================= LIGHTING ================= */
+scene.add(new THREE.AmbientLight(0x222222,0.4));
 
-const flashlight = new THREE.SpotLight(0xffffff, 2, 10, Math.PI/7, 0.4);
+const flashlight = new THREE.SpotLight(0xffffff, 2, 10, Math.PI/7, 0.5);
 camera.add(flashlight);
 camera.add(flashlight.target);
 flashlight.position.set(0,0,0);
 flashlight.target.position.set(0,0,-1);
 
-/* ================= MAP ================= */
-const colliders = [];
-const wallMat = new THREE.MeshStandardMaterial({ color:0x1a1a1a });
+/* ================= ENVIRONMENT ================= */
+const solidWalls = [];
 
-function wall(x,z,w,d){
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w,3,d), wallMat);
-  m.position.set(x,1.5,z);
+function wall(w,h,d,x,y,z){
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshStandardMaterial({ color:0x1a1a1a })
+  );
+  m.position.set(x,y,z);
   scene.add(m);
-  colliders.push(m);
+  solidWalls.push(m);
 }
 
-wall(0,-5,10,0.5);
-wall(0,5,10,0.5);
-wall(-5,0,0.5,10);
-wall(5,0,0.5,10);
+wall(12,4,0.5,0,2,-4);
+wall(0.5,4,12,-6,2,-4);
+wall(0.5,4,12,6,2,-4);
 
-/* ================= LOBBY SIM ================= */
-const fakeNames = ["Alex","Jordan","Chris","Taylor","Morgan","Riley"];
-const lobbyPlayers = [];
-
-fakeNames.forEach(name=>{
-  const div = document.createElement("div");
-  div.className="player";
-  div.innerHTML = `<span>${name}</span><div class="mic"></div>`;
-  lobbyEl.appendChild(div);
-  lobbyPlayers.push(div);
-});
-
-setInterval(()=>{
-  lobbyPlayers.forEach(p=>{
-    p.querySelector(".mic").classList.toggle("talk", Math.random()<0.2);
-  });
-},400);
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(12,12),
+  new THREE.MeshStandardMaterial({ color:0x111111 })
+);
+floor.rotation.x = -Math.PI/2;
+scene.add(floor);
 
 /* ================= INPUT ================= */
-let started=false;
-let keys={};
-let yaw=0, pitch=0;
+const keys = {};
+addEventListener("keydown", e => keys[e.code] = true);
+addEventListener("keyup", e => keys[e.code] = false);
 
-addEventListener("keydown",e=>{
-  keys[e.code]=true;
-  if(e.code==="Enter" && !started){
-    started=true;
-    overlay.style.display="none";
-    canvas.requestPointerLock();
-  }
-});
-addEventListener("keyup",e=>keys[e.code]=false);
+canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+canvas.onclick = () => canvas.requestPointerLock();
 
-addEventListener("mousemove",e=>{
-  if(!started) return;
-  yaw -= e.movementX * 0.002;   // FIXED (not inverted)
+let yaw = 0;
+let pitch = 0;
+
+addEventListener("mousemove", e => {
+  if (document.pointerLockElement !== canvas) return;
+
+  // ✅ FIXED INVERSION
+  yaw   -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
-  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2,pitch));
-  camera.rotation.set(pitch,yaw,0);
+  pitch = Math.max(-1.5, Math.min(1.5, pitch));
+
+  camera.rotation.set(pitch, yaw, 0);
 });
 
 /* ================= MOVEMENT + COLLISION ================= */
-function collide(pos){
-  for(const c of colliders){
-    const b = new THREE.Box3().setFromObject(c);
-    if(b.containsPoint(pos)) return true;
+const velocity = new THREE.Vector3();
+
+function canMove(pos){
+  for (const w of solidWalls){
+    if (pos.distanceTo(w.position) < 1) return false;
   }
-  return false;
+  return true;
 }
 
+/* ================= CLOSET DRAGGER ================= */
+const draggers = [];
+
+function spawnDragger(x,z){
+  const d = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.3,1.2),
+    new THREE.MeshStandardMaterial({ color:0x330000 })
+  );
+  d.position.set(x,1,z);
+  scene.add(d);
+  draggers.push({
+    mesh:d,
+    dir:Math.random()*Math.PI*2,
+    cooldown:0
+  });
+}
+
+spawnDragger(-2,-2);
+spawnDragger(2,-6);
+
+/* ================= AUDIO ================= */
+const listener = new THREE.AudioListener();
+camera.add(listener);
+const dragSound = new THREE.Audio(listener);
+new THREE.AudioLoader().load("drag.mp3", b=>{
+  dragSound.setBuffer(b);
+  dragSound.setVolume(1);
+});
+
+/* ================= DRAG STATE ================= */
+let dragged = false;
+let dragTime = 0;
+
+/* ================= LOOP ================= */
 const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  if(started){
-    const dir = new THREE.Vector3();
-    if(keys.KeyW) dir.z-=1;
-    if(keys.KeyS) dir.z+=1;
-    if(keys.KeyA) dir.x-=1;
-    if(keys.KeyD) dir.x+=1;
+  if (!dragged){
+    const speed = keys["ShiftLeft"] ? 4 : 2;
+    velocity.set(0,0,0);
 
-    dir.normalize().applyEuler(camera.rotation).multiplyScalar(dt*3);
+    if (keys["KeyW"]) velocity.z -= speed * dt;
+    if (keys["KeyS"]) velocity.z += speed * dt;
+    if (keys["KeyA"]) velocity.x -= speed * dt;
+    if (keys["KeyD"]) velocity.x += speed * dt;
 
-    const next = camera.position.clone().add(dir);
-    if(!collide(next)) camera.position.copy(next);
+    velocity.applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
+    const nextPos = camera.position.clone().add(velocity);
+    if (canMove(nextPos)) camera.position.copy(nextPos);
+  }
+
+  /* === DRAGGER AI === */
+  draggers.forEach(d=>{
+    d.cooldown -= dt;
+    d.mesh.position.x += Math.cos(d.dir)*dt*0.5;
+    d.mesh.position.z += Math.sin(d.dir)*dt*0.5;
+
+    if (Math.random()<0.01) d.dir += (Math.random()-0.5);
+
+    const dist = d.mesh.position.distanceTo(camera.position);
+    if (dist < 1.2 && !dragged && d.cooldown <= 0){
+      dragged = true;
+      dragTime = performance.now();
+      d.cooldown = 5;
+      flashlight.intensity = 0;
+      if (dragSound.buffer) dragSound.play();
+    }
+  });
+
+  if (dragged){
+    camera.position.x += Math.sin(performance.now()*0.02)*0.05;
+    if (performance.now() - dragTime > 1200){
+      dragged = false;
+      flashlight.intensity = 2;
+    }
   }
 
   renderer.render(scene,camera);
 }
 animate();
 
-addEventListener("resize",()=>{
-  camera.aspect=innerWidth/innerHeight;
+/* ================= RESIZE ================= */
+addEventListener("resize", ()=>{
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
