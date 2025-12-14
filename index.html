@@ -173,4 +173,28 @@ function animate(){
 
   if(keys.KeyE){
     for(const d of doors){
-      if(camer
+      if(camera.position.distanceTo(d.position)<2){
+        d.userData.open = !d.userData.open;
+      }
+    }
+    keys.KeyE=false;
+  }
+
+  for(const d of doors){
+    const target = d.userData.open ? Math.PI/2 : 0;
+    d.userData.angle += (target - d.userData.angle)*0.1;
+    d.rotation.y = d.userData.angle;
+  }
+
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
