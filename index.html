@@ -231,3 +231,28 @@ function animate(){
     camera.position.y += velocity.y * dt;
 
     if(camera.position.y < 1.6){
+      velocity.y = 0;
+      camera.position.y = 1.6;
+      canJump = true;
+    }
+
+    velocity.x *= 0.85;
+    velocity.z *= 0.85;
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+/* ================= RESIZE ================= */
+window.addEventListener("resize", ()=>{
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
+</html>
+
