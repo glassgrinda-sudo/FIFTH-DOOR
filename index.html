@@ -12,162 +12,179 @@ html,body{
   background:#000;
 }
 canvas{display:block}
+#ui{
+  position:fixed;
+  top:10px;
+  left:10px;
+  color:#aaa;
+  font-family:monospace;
+  z-index:10;
+}
 </style>
 </head>
 <body>
+
+<div id="ui">WASD move · Mouse look · F flashlight</div>
 <canvas id="c"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-/* ================= CORE ================= */
+/* ================= BASIC SETUP ================= */
 const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+const renderer = new THREE.WebGLRenderer({ canvas });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x000000, 1);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 1, 18);
+scene.fog = new THREE.Fog(0x000000, 2, 20);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 50);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
 camera.position.set(0,1.6,5);
+scene.add(camera);
 
-const controls = new THREE.PointerLockControls(camera, document.body);
-scene.add(controls.getObject());
+/* ================= LIGHTING ================= */
+scene.add(new THREE.AmbientLight(0x222222));
 
-document.body.addEventListener("click",()=>controls.lock());
-
-/* ================= LIGHT ================= */
-scene.add(new THREE.AmbientLight(0x222222,0.3));
-
-const flashlight = new THREE.SpotLight(0xffffff,2,12,Math.PI/7,0.4,1);
+const flashlight = new THREE.SpotLight(0xffffff, 2, 15, Math.PI/7, 0.5, 1);
 flashlight.position.set(0,0,0);
 flashlight.target.position.set(0,0,-1);
 camera.add(flashlight);
 camera.add(flashlight.target);
 
-/* ================= ENV ================= */
-const wallMat = new THREE.MeshStandardMaterial({color:0x1c1c1c});
-const floorMat = new THREE.MeshStandardMaterial({color:0x111111});
-
-function room(x,z,w,d,psych=false){
-  const g = new THREE.Group();
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(w,d), floorMat);
-  floor.rotation.x=-Math.PI/2;
-  g.add(floor);
-
-  const wall1 = new THREE.Mesh(new THREE.PlaneGeometry(w,3), wallMat);
-  wall1.position.set(0,1.5,-d/2);
-  g.add(wall1);
-
-  const wall2 = wall1.clone();
-  wall2.position.z=d/2;
-  wall2.rotation.y=Math.PI;
-  g.add(wall2);
-
-  const wall3 = new THREE.Mesh(new THREE.PlaneGeometry(d,3), wallMat);
-  wall3.position.set(-w/2,1.5,0);
-  wall3.rotation.y=Math.PI/2;
-  g.add(wall3);
-
-  const wall4 = wall3.clone();
-  wall4.position.x=w/2;
-  wall4.rotation.y=-Math.PI/2;
-  g.add(wall4);
-
-  g.position.set(x,0,z);
-  scene.add(g);
-
-  if(psych){
-    psychRooms.push({group:g,time:Math.random()*10});
-  }
-}
-
-room(0,0,6,6);
-room(8,0,6,6,true);
-room(-8,0,6,6);
-room(0,-8,6,6,true);
-
-/* ================= MOVEMENT ================= */
-const keys={};
-addEventListener("keydown",e=>keys[e.code]=true);
+/* ================= INPUT ================= */
+const keys = {};
+addEventListener("keydown",e=>{
+  keys[e.code]=true;
+  if(e.code==="KeyF") flashlight.visible=!flashlight.visible;
+});
 addEventListener("keyup",e=>keys[e.code]=false);
 
-let velocity=new THREE.Vector3();
+let yaw=0, pitch=0;
+addEventListener("mousemove",e=>{
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+  camera.rotation.set(pitch, yaw, 0);
+});
 
-/* ================= PSYCHOLOGICAL ROOMS ================= */
-const psychRooms=[];
-function updatePsych(dt){
-  psychRooms.forEach(r=>{
-    r.time+=dt;
-    r.group.children.forEach(m=>{
-      if(m.geometry && m.geometry.attributes.position){
-        const pos=m.geometry.attributes.position;
-        for(let i=0;i<pos.count;i++){
-          const y=Math.sin(r.time+i)*0.002;
-          pos.setY(i,pos.getY(i)+y);
-        }
-        pos.needsUpdate=true;
-      }
-    });
-  });
+/* ================= COLLISION SYSTEM ================= */
+const colliders = [];
+
+function addCollider(mesh){
+  mesh.geometry.computeBoundingBox();
+  colliders.push(mesh);
 }
 
+/* ================= ENVIRONMENT ================= */
+const wallMat = new THREE.MeshStandardMaterial({ color:0x1b1b1b });
+function wall(w,h,x,y,z,ry=0){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,0.3), wallMat);
+  m.position.set(x,y,z);
+  m.rotation.y = ry;
+  scene.add(m);
+  addCollider(m);
+}
+
+wall(10,4,0,2,-5);
+wall(10,4,-5,2,0,Math.PI/2);
+wall(10,4,5,2,0,-Math.PI/2);
+
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(12,12),
+  new THREE.MeshStandardMaterial({ color:0x111111 })
+);
+floor.rotation.x = -Math.PI/2;
+scene.add(floor);
+
+/* ================= LOBBY SIMULATION ================= */
+const lobbyGroup = new THREE.Group();
+scene.add(lobbyGroup);
+
+const fakePlayers = [];
+for(let i=0;i<4;i++){
+  const p = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.3,1),
+    new THREE.MeshStandardMaterial({ color:0x444444 })
+  );
+  p.position.set(Math.random()*4-2,1,Math.random()*4-2);
+  lobbyGroup.add(p);
+  fakePlayers.push(p);
+}
+
+let inLobby = true;
+setTimeout(()=>{
+  inLobby = false;
+  lobbyGroup.visible = false;
+}, 5000);
+
 /* ================= CLOSET DRAGGER ================= */
-const closetZones=[
-  new THREE.Box3(
-    new THREE.Vector3(-1,0,-1),
-    new THREE.Vector3(1,2,1)
-  )
-];
+const dragger = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.35,1.2),
+  new THREE.MeshStandardMaterial({ color:0x552222 })
+);
+dragger.position.set(2,1,2);
+scene.add(dragger);
 
-let dragCooldown=0;
+/* ================= PSYCHO ROOM ================= */
+const psychoZone = new THREE.Box3(
+  new THREE.Vector3(-2,0,-2),
+  new THREE.Vector3(2,3,2)
+);
 
-function checkClosetDrag(dt){
-  if(dragCooldown>0){
-    dragCooldown-=dt;
-    return;
-  }
+/* ================= MOVEMENT ================= */
+const velocity = new THREE.Vector3();
+const dir = new THREE.Vector3();
+const raycaster = new THREE.Raycaster();
 
-  const p = controls.getObject().position;
-  closetZones.forEach(z=>{
-    if(z.containsPoint(p)){
-      dragCooldown=5;
-      // yank
-      const dir = new THREE.Vector3(
-        (Math.random()-.5)*2,
-        0,
-        (Math.random()-.5)*2
-      );
-      velocity.add(dir.multiplyScalar(2));
-      camera.rotation.z = (Math.random()-.5)*0.2;
-      setTimeout(()=>camera.rotation.z=0,400);
-    }
+function canMove(nextPos){
+  const box = new THREE.Box3(
+    new THREE.Vector3(nextPos.x-0.3, nextPos.y-1.6, nextPos.z-0.3),
+    new THREE.Vector3(nextPos.x+0.3, nextPos.y+0.3, nextPos.z+0.3)
+  );
+  return !colliders.some(c=>{
+    const cb = new THREE.Box3().setFromObject(c);
+    return box.intersectsBox(cb);
   });
 }
 
 /* ================= LOOP ================= */
-const clock=new THREE.Clock();
+const clock = new THREE.Clock();
 
 function animate(){
   requestAnimationFrame(animate);
-  const dt=clock.getDelta();
+  const dt = clock.getDelta();
 
-  velocity.x -= velocity.x * 6 * dt;
-  velocity.z -= velocity.z * 6 * dt;
+  /* lobby idle */
+  if(inLobby){
+    fakePlayers.forEach(p=>{
+      p.position.x += Math.sin(performance.now()*0.001)*0.001;
+    });
+  }
 
-  if(keys["KeyW"]) velocity.z -= 6*dt;
-  if(keys["KeyS"]) velocity.z += 6*dt;
-  if(keys["KeyA"]) velocity.x -= 6*dt;
-  if(keys["KeyD"]) velocity.x += 6*dt;
+  /* movement */
+  dir.set(0,0,0);
+  if(keys.KeyW) dir.z -= 1;
+  if(keys.KeyS) dir.z += 1;
+  if(keys.KeyA) dir.x -= 1;
+  if(keys.KeyD) dir.x += 1;
+  dir.normalize();
 
-  controls.moveRight(-velocity.x);
-  controls.moveForward(-velocity.z);
+  velocity.copy(dir).applyEuler(camera.rotation).multiplyScalar(dt*3);
+  const nextPos = camera.position.clone().add(velocity);
+  if(canMove(nextPos)) camera.position.copy(nextPos);
 
-  updatePsych(dt);
-  checkClosetDrag(dt);
+  /* dragger proximity */
+  if(camera.position.distanceTo(dragger.position) < 1.5){
+    camera.position.lerp(new THREE.Vector3(0,1.6,4),0.1);
+  }
+
+  /* psycho room effect */
+  if(psychoZone.containsPoint(camera.position)){
+    floor.material.color.setHex(0x0f0f0f);
+  } else {
+    floor.material.color.setHex(0x111111);
+  }
 
   renderer.render(scene,camera);
 }
@@ -175,10 +192,11 @@ animate();
 
 /* ================= RESIZE ================= */
 addEventListener("resize",()=>{
-  camera.aspect=innerWidth/innerHeight;
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 });
 </script>
+
 </body>
 </html>
