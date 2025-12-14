@@ -1,210 +1,231 @@
-import pygame
-import random
-import time
-import sys
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>FIFTH DOOR – Core Build</title>
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+}
+#ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: #aaa;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  z-index: 10;
+}
+</style>
+</head>
+<body>
 
-# Initialize Pygame
-pygame.init()
+<div id="ui">WASD move · Mouse look · E open door · F flashlight</div>
+<canvas id="c"></canvas>
 
-# Screen dimensions
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("FIFTH DOOR - Horror Game Prototype")
+<script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
 
-# Colors
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-RED = (255, 0, 0)
-GRAY = (128, 128, 128)
+<script>
+/* ================= BASIC SETUP ================= */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
 
-# Fonts
-font = pygame.font.SysFont(None, 36)
-small_font = pygame.font.SysFont(None, 24)
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.Fog(0x000000, 5, 25);
 
-# Player class for lobby and in-game
-class Player:
-    def __init__(self, name, is_ai=True):
-        self.name = name
-        self.is_ai = is_ai
-        self.mic_active = False
-        self.animation_state = 0  # For idle animations
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  100
+);
 
-# Lobby class
-class Lobby:
-    def __init__(self):
-        self.players = []
-        self.min_players = 5
-        self.max_players = 8
-        self.fill_with_ai()
+/* ================= PLAYER ================= */
+const player = {
+  height: 1.6,
+  speed: 4,
+  sprint: 6,
+  velocity: new THREE.Vector3()
+};
 
-    def fill_with_ai(self):
-        ai_names = ["AI_Player1", "AI_Player2", "AI_Player3", "AI_Player4", "AI_Player5", "AI_Player6", "AI_Player7"]
-        while len(self.players) < self.min_players:
-            self.players.append(Player(random.choice(ai_names)))
+camera.position.set(0, player.height, 0);
 
-    def add_real_player(self, name):
-        if len(self.players) < self.max_players:
-            # Quietly disconnect an AI if present
-            ai_players = [p for p in self.players if p.is_ai]
-            if ai_players:
-                self.players.remove(random.choice(ai_players))
-            self.players.append(Player(name, is_ai=False))
-        self.fill_with_ai()  # Ensure minimum
+/* ================= MOUSE LOOK (FIXED) ================= */
+let yaw = 0;
+let pitch = 0;
 
-    def update(self):
-        # Simulate mic flickering and animations
-        for player in self.players:
-            player.mic_active = random.choice([True, False])
-            player.animation_state = (player.animation_state + 1) % 10  # Simple animation cycle
+const pitchObject = new THREE.Object3D();
+pitchObject.add(camera);
 
-    def draw(self, screen):
-        screen.fill(BLACK)
-        title = font.render("Lobby - Waiting for Players", True, WHITE)
-        screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 50))
+const yawObject = new THREE.Object3D();
+yawObject.add(pitchObject);
+scene.add(yawObject);
 
-        y = 150
-        for i, player in enumerate(self.players):
-            color = GRAY if player.is_ai else WHITE
-            name_text = small_font.render(player.name, True, color)
-            screen.blit(name_text, (100, y))
-            
-            # Mic icon
-            mic_color = GREEN if player.mic_active else RED
-            pygame.draw.circle(screen, mic_color, (70, y + 10), 10)
-            
-            # Idle animation (simple bouncing effect)
-            anim_offset = player.animation_state % 5
-            pygame.draw.rect(screen, color, (50, y + anim_offset, 10, 10))
-            
-            # Occasional voice lines (text simulation)
-            if random.random() < 0.01:  # Rare chance
-                voice_line = small_font.render(random.choice(["Hey...", "Ready?", "Who's there?"]), True, WHITE)
-                screen.blit(voice_line, (200, y))
-            
-            y += 50
+document.body.addEventListener("click", () => {
+  document.body.requestPointerLock();
+});
 
-# Simple in-game mechanics
-class Game:
-    def __init__(self, players):
-        self.players = players  # From lobby
-        self.player_pos = [SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2]  # Main player position
-        self.enemy_pos = [random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)]
-        self.items = ["Flashlight", "Keys", "Tools", "Radio"]
-        self.current_item = 0
-        self.alone_with_ai = False
-        self.drag_timer = 0
-        self.enemy_hunting = False
+document.addEventListener("mousemove", e => {
+  if (document.pointerLockElement !== document.body) return;
 
-    def update(self):
-        # Simulate AI players behavior
-        for player in self.players:
-            if player.is_ai:
-                # Imperfect pathing: random movement
-                player.animation_state = random.randint(0, 10)
-                if random.random() < 0.05:
-                    print(f"AI says: {random.choice(['You hear that?', 'Stay here a sec.', 'I think it’s clear.'])}")
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
 
-        # Check if alone with AI (simulated)
-        if random.random() < 0.01 and any(p.is_ai for p in self.players):
-            self.alone_with_ai = True
-            self.drag_timer = time.time()
+  pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
 
-        if self.alone_with_ai:
-            if time.time() - self.drag_timer > 2:  # Drag duration
-                self.alone_with_ai = False
-                self.enemy_hunting = True  # Ping enemy
-                print("Dragged into closet! Enemy alerted.")
+  yawObject.rotation.y = yaw;
+  pitchObject.rotation.x = pitch;
+});
 
-        # Enemy movement
-        if self.enemy_hunting:
-            # Move towards player
-            if self.enemy_pos[0] < self.player_pos[0]:
-                self.enemy_pos[0] += 1
-            elif self.enemy_pos[0] > self.player_pos[0]:
-                self.enemy_pos[0] -= 1
-            if self.enemy_pos[1] < self.player_pos[1]:
-                self.enemy_pos[1] += 1
-            elif self.enemy_pos[1] > self.player_pos[1]:
-                self.enemy_pos[1] -= 1
+/* ================= FLASHLIGHT ================= */
+const flashlight = new THREE.SpotLight(
+  0xffffff,
+  2,
+  15,
+  Math.PI / 6,
+  0.4,
+  1
+);
+flashlight.position.set(0, 0, 0);
+flashlight.target.position.set(0, 0, -1);
+camera.add(flashlight);
+camera.add(flashlight.target);
 
-            # 5-note sound cue simulation
-            if random.random() < 0.1:
-                print("Enemy sound: *5-note pentatonic*")
+let flashlightOn = true;
 
-    def handle_input(self, event):
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_w:
-                self.player_pos[1] -= 5
-            elif event.key == pygame.K_s:
-                self.player_pos[1] += 5
-            elif event.key == pygame.K_a:
-                self.player_pos[0] -= 5
-            elif event.key == pygame.K_d:
-                self.player_pos[0] += 5
-            elif event.key == pygame.K_SPACE:
-                self.current_item = (self.current_item + 1) % len(self.items)
-                print(f"Holding: {self.items[self.current_item]}")
+/* ================= WORLD GEOMETRY ================= */
+const colliders = [];
 
-    def draw(self, screen):
-        screen.fill(BLACK)
-        title = font.render("In-Game - FIFTH DOOR", True, WHITE)
-        screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 50))
+function wall(x, y, z, w, h, d) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color: 0x222222 })
+  );
+  mesh.position.set(x, y + h / 2, z);
+  scene.add(mesh);
+  colliders.push(mesh);
+}
 
-        # Draw player
-        pygame.draw.circle(screen, WHITE, self.player_pos, 20)
-        
-        # Draw hands/item (simple text)
-        item_text = small_font.render(self.items[self.current_item], True, WHITE)
-        screen.blit(item_text, (self.player_pos[0] - 20, self.player_pos[1] + 30))
+function floor(x, z, w, d) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w, 0.1, d),
+    new THREE.MeshStandardMaterial({ color: 0x111111 })
+  );
+  mesh.position.set(x, 0, z);
+  scene.add(mesh);
+}
 
-        # Draw AI players (simple circles)
-        for i, player in enumerate(self.players):
-            if player.is_ai:
-                ai_pos = [100 + i * 50, 200 + player.animation_state]
-                pygame.draw.circle(screen, GRAY, ai_pos, 15)
+/* ================= LIGHTING ================= */
+scene.add(new THREE.AmbientLight(0x404040));
 
-        # Draw enemy
-        pygame.draw.rect(screen, RED, (*self.enemy_pos, 30, 30))
+/* ================= MAP ================= */
+/* Room 1 */
+floor(0, 0, 6, 6);
+wall(-3, 0, 0, 0.2, 3, 6);
+wall(3, 0, 0, 0.2, 3, 6);
+wall(0, 0, -3, 6, 3, 0.2);
 
-        if self.alone_with_ai:
-            drag_text = font.render("Being Dragged!", True, RED)
-            screen.blit(drag_text, (SCREEN_WIDTH // 2 - drag_text.get_width() // 2, SCREEN_HEIGHT // 2))
+/* Corridor */
+floor(0, -6, 2, 6);
+wall(-1, 0, -6, 0.2, 3, 6);
+wall(1, 0, -6, 0.2, 3, 6);
 
-# Main game loop
-def main():
-    clock = pygame.time.Clock()
-    lobby = Lobby()
-    game_started = False
+/* Room 2 */
+floor(0, -12, 6, 6);
+wall(-3, 0, -12, 0.2, 3, 6);
+wall(3, 0, -12, 0.2, 3, 6);
+wall(0, 0, -15, 6, 3, 0.2);
 
-    # Simulate adding real players (for demo, add one)
-    lobby.add_real_player("RealPlayer")
+/* ================= DOOR ================= */
+const doorPivot = new THREE.Object3D();
+doorPivot.position.set(0, 0, -3);
+scene.add(doorPivot);
 
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            if game_started:
-                game.handle_input(event)
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                game_started = True
-                game = Game(lobby.players)
+const door = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 2.5, 0.2),
+  new THREE.MeshStandardMaterial({ color: 0x552222 })
+);
+door.position.set(0.5, 1.25, 0);
+doorPivot.add(door);
 
-        if not game_started:
-            lobby.update()
-            lobby.draw(screen)
-            start_text = small_font.render("Press ENTER to start game", True, WHITE)
-            screen.blit(start_text, (SCREEN_WIDTH // 2 - start_text.get_width() // 2, 500))
-        else:
-            game.update()
-            game.draw(screen)
+let doorOpen = false;
 
-        pygame.display.flip()
-        clock.tick(60)
+/* ================= INPUT ================= */
+const keys = {};
+window.addEventListener("keydown", e => {
+  keys[e.code] = true;
 
-    pygame.quit()
-    sys.exit()
+  if (e.code === "KeyF") {
+    flashlightOn = !flashlightOn;
+    flashlight.intensity = flashlightOn ? 2 : 0;
+  }
 
-if __name__ == "__main__":
-    main()
+  if (e.code === "KeyE") {
+    doorOpen = !doorOpen;
+  }
+});
+window.addEventListener("keyup", e => keys[e.code] = false);
+
+/* ================= COLLISION ================= */
+function collide(nextPos) {
+  const box = new THREE.Box3().setFromCenterAndSize(
+    nextPos,
+    new THREE.Vector3(0.6, player.height, 0.6)
+  );
+
+  for (const c of colliders) {
+    const cBox = new THREE.Box3().setFromObject(c);
+    if (box.intersectsBox(cBox)) return true;
+  }
+  return false;
+}
+
+/* ================= LOOP ================= */
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  /* Door animation */
+  doorPivot.rotation.y += ((doorOpen ? -Math.PI / 2 : 0) - doorPivot.rotation.y) * 0.1;
+
+  /* Movement */
+  const dir = new THREE.Vector3();
+  const speed = keys["ShiftLeft"] ? player.sprint : player.speed;
+
+  if (keys["KeyW"]) dir.z -= 1;
+  if (keys["KeyS"]) dir.z += 1;
+  if (keys["KeyA"]) dir.x -= 1;
+  if (keys["KeyD"]) dir.x += 1;
+
+  dir.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  const move = dir.multiplyScalar(speed * dt);
+
+  const nextPos = yawObject.position.clone().add(move);
+  nextPos.y = 0;
+
+  if (!collide(new THREE.Vector3(nextPos.x, player.height / 2, nextPos.z))) {
+    yawObject.position.copy(nextPos);
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+/* ================= RESIZE ================= */
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
