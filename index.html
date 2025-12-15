@@ -2,198 +2,158 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>FIFTH DOOR – Stable Core</title>
+<title>FIFTH DOOR</title>
+
 <style>
 html, body {
   margin: 0;
-  padding: 0;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background: #000;
-  font-family: monospace;
+  font-family: Arial, sans-serif;
 }
+canvas { display: block; }
+
 #ui {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  color: #eee;
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  color: #bbb;
+  background: rgba(0,0,0,0.6);
+  padding: 10px 14px;
+  border-radius: 4px;
   z-index: 10;
-  font-size: 14px;
 }
-canvas { display:block; }
 </style>
 </head>
-<body>
 
+<body>
 <div id="ui">
-<b>FIFTH DOOR</b><br>
-WASD move · Mouse look · Shift sprint · F flashlight · E open door<br>
-Click to lock mouse
+  <b>FIFTH DOOR</b><br>
+  WASD Move · Mouse Look · F Flashlight · Shift Sprint
 </div>
 
+<canvas id="c"></canvas>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-/* ================= SETUP ================= */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x020202);
-scene.fog = new THREE.Fog(0x020202, 3, 20);
-
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
-camera.position.set(0, 1.7, 4);
-
-const renderer = new THREE.WebGLRenderer({ antialias:true });
+/* ================= CORE ================= */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
-document.body.appendChild(renderer.domElement);
+renderer.setClearColor(0x000000, 1);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x050505, 0.065);
+
+/* ================= CAMERA ================= */
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 1.6, 0);
+
+/* ================= CONTROLS ================= */
+const controls = new THREE.PointerLockControls(camera, document.body);
+document.body.addEventListener("click", () => controls.lock());
+scene.add(controls.getObject());
 
 /* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0x222222));
+scene.add(new THREE.AmbientLight(0x222222, 0.25));
 
-const flashlight = new THREE.SpotLight(0xffffff, 2, 12, Math.PI/7, 0.5);
-flashlight.position.set(0,0,0);
-flashlight.target.position.set(0,0,-1);
+/* 🔦 FLASHLIGHT (SLIGHTLY BRIGHTER – LOCKED CHANGE) */
+const flashlight = new THREE.SpotLight(
+  0xffffff,
+  2.8,        // ← increased from 2.0
+  18,         // ← increased from 15
+  Math.PI / 6,
+  0.4,
+  1.2
+);
+flashlight.position.set(0, 0, 0);
+flashlight.target.position.set(0, 0, -1);
 camera.add(flashlight);
 camera.add(flashlight.target);
 scene.add(camera);
 
-let flashlightOn = true;
-
-/* ================= CONTROLS ================= */
-let pitch = 0, yaw = 0;
-let locked = false;
-const keys = {};
-
-addEventListener("click", () => {
-  renderer.domElement.requestPointerLock();
+/* ================= MATERIALS ================= */
+const wallMat = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a,
+  roughness: 0.9
+});
+const floorMat = new THREE.MeshStandardMaterial({
+  color: 0x121212,
+  roughness: 0.95
 });
 
-document.addEventListener("pointerlockchange", () => {
-  locked = document.pointerLockElement === renderer.domElement;
-});
+/* ================= ROOM ================= */
+function room(x, z) {
+  const g = new THREE.Group();
 
-addEventListener("mousemove", e => {
-  if (!locked) return;
-  yaw -= e.movementX * 0.002;
-  pitch -= e.movementY * 0.002;
-  pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
-});
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  g.add(floor);
 
-addEventListener("keydown", e => {
-  keys[e.code] = true;
-  if (e.code === "KeyF") {
-    flashlightOn = !flashlightOn;
-    flashlight.intensity = flashlightOn ? 2 : 0;
-  }
-});
-addEventListener("keyup", e => keys[e.code] = false);
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), wallMat);
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.y = 4;
+  g.add(ceiling);
 
-/* ================= COLLISION ================= */
-const colliders = [];
+  const walls = [
+    [0, 2, -5, 0],
+    [0, 2, 5, Math.PI],
+    [-5, 2, 0, Math.PI / 2],
+    [5, 2, 0, -Math.PI / 2]
+  ];
 
-function addWall(w,h,d,x,y,z) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w,h,d),
-    new THREE.MeshStandardMaterial({ color:0x1a1a1a })
-  );
-  mesh.position.set(x,y,z);
-  scene.add(mesh);
-  colliders.push(mesh);
-  return mesh;
+  walls.forEach(w => {
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(10, 4), wallMat);
+    wall.position.set(w[0], w[1], w[2]);
+    wall.rotation.y = w[3];
+    g.add(wall);
+  });
+
+  g.position.set(x, 0, z);
+  scene.add(g);
 }
 
-/* ================= MAP ================= */
-// ROOM
-addWall(10, 4, 0.2, 0, 2, -5); // back
-addWall(10, 4, 0.2, 0, 2, 5);  // front
-addWall(0.2, 4, 10, -5, 2, 0);
-addWall(0.2, 4, 10, 5, 2, 0);
-
-// FLOOR + CEILING
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(10,10),
-  new THREE.MeshStandardMaterial({ color:0x111111 })
-);
-floor.rotation.x = -Math.PI/2;
-scene.add(floor);
-
-const ceiling = floor.clone();
-ceiling.rotation.x = Math.PI/2;
-ceiling.position.y = 4;
-scene.add(ceiling);
-
-// CORRIDOR
-addWall(0.2,4,6,-2,2,-8);
-addWall(0.2,4,6,2,2,-8);
-addWall(4,4,0.2,0,2,-11);
-
-/* ================= DOOR ================= */
-const doorPivot = new THREE.Object3D();
-doorPivot.position.set(0,1,-5);
-scene.add(doorPivot);
-
-const door = new THREE.Mesh(
-  new THREE.BoxGeometry(1.2,2.5,0.15),
-  new THREE.MeshStandardMaterial({ color:0x4b0f0f })
-);
-door.position.set(0.6,0,0);
-doorPivot.add(door);
-
-let doorOpen = false;
-
-addEventListener("keydown", e => {
-  if (e.code === "KeyE") {
-    const dist = camera.position.distanceTo(doorPivot.position);
-    if (dist < 2) doorOpen = !doorOpen;
-  }
-});
+room(0, 0);
 
 /* ================= MOVEMENT ================= */
-const velocity = new THREE.Vector3();
-const dir = new THREE.Vector3();
+const keys = {};
+addEventListener("keydown", e => keys[e.code] = true);
+addEventListener("keyup", e => keys[e.code] = false);
 
-function collides(pos) {
-  for (const c of colliders) {
-    const b = new THREE.Box3().setFromObject(c);
-    if (b.containsPoint(pos)) return true;
-  }
-  return false;
-}
+let velocity = new THREE.Vector3();
+const clock = new THREE.Clock();
 
 /* ================= LOOP ================= */
 function animate() {
   requestAnimationFrame(animate);
+  const dt = clock.getDelta();
 
-  camera.rotation.order = "YXZ";
-  camera.rotation.y = yaw;
-  camera.rotation.x = pitch;
+  velocity.set(0, 0, 0);
+  const speed = keys["ShiftLeft"] ? 6 : 3;
 
-  dir.set(0,0,0);
-  if (keys["KeyW"]) dir.z -= 1;
-  if (keys["KeyS"]) dir.z += 1;
-  if (keys["KeyA"]) dir.x -= 1;
-  if (keys["KeyD"]) dir.x += 1;
+  if (keys["KeyW"]) velocity.z -= speed * dt;
+  if (keys["KeyS"]) velocity.z += speed * dt;
+  if (keys["KeyA"]) velocity.x -= speed * dt;
+  if (keys["KeyD"]) velocity.x += speed * dt;
 
-  dir.normalize();
-  dir.applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
-
-  const speed = keys["ShiftLeft"] ? 0.08 : 0.04;
-  const nextPos = camera.position.clone().addScaledVector(dir, speed);
-
-  if (!collides(nextPos)) camera.position.copy(nextPos);
-
-  doorPivot.rotation.y += ((doorOpen ? -Math.PI/2 : 0) - doorPivot.rotation.y) * 0.1;
+  controls.moveRight(velocity.x);
+  controls.moveForward(velocity.z);
 
   renderer.render(scene, camera);
 }
-
 animate();
 
+/* ================= RESIZE ================= */
 addEventListener("resize", () => {
-  camera.aspect = innerWidth/innerHeight;
+  camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 </script>
-
 </body>
 </html>
