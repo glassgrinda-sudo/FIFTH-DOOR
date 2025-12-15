@@ -3,156 +3,228 @@
 <head>
 <meta charset="UTF-8" />
 <title>FIFTH DOOR</title>
-
 <style>
-html, body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #000;
-  font-family: Arial, sans-serif;
+html,body {
+  margin:0;
+  padding:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
 }
-canvas { display: block; }
-
+canvas { display:block; }
 #ui {
-  position: absolute;
-  top: 15px;
-  left: 15px;
-  color: #bbb;
-  background: rgba(0,0,0,0.6);
-  padding: 10px 14px;
-  border-radius: 4px;
-  z-index: 10;
+  position:absolute;
+  top:10px;
+  left:10px;
+  color:#ccc;
+  font-family:Arial;
+  font-size:14px;
+  z-index:10;
 }
 </style>
 </head>
 
 <body>
-<div id="ui">
-  <b>FIFTH DOOR</b><br>
-  WASD Move · Mouse Look · F Flashlight · Shift Sprint
-</div>
-
+<div id="ui">WASD move · Mouse look · F flashlight · Shift sprint</div>
 <canvas id="c"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-/* ================= CORE ================= */
+/* ================= SETUP ================= */
 const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
-renderer.setClearColor(0x000000, 1);
+renderer.setClearColor(0x050505);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x050505, 0.065);
+scene.fog = new THREE.Fog(0x050505, 3, 18);
 
-/* ================= CAMERA ================= */
-const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 100);
-camera.position.set(0, 1.6, 0);
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0,1.6,0);
 
-/* ================= CONTROLS ================= */
-const controls = new THREE.PointerLockControls(camera, document.body);
-document.body.addEventListener("click", () => controls.lock());
-scene.add(controls.getObject());
+/* ================= LIGHT ================= */
+scene.add(new THREE.AmbientLight(0x222222, 0.3));
 
-/* ================= LIGHTING ================= */
-scene.add(new THREE.AmbientLight(0x222222, 0.25));
-
-/* 🔦 FLASHLIGHT (SLIGHTLY BRIGHTER – LOCKED CHANGE) */
 const flashlight = new THREE.SpotLight(
   0xffffff,
-  2.8,        // ← increased from 2.0
-  18,         // ← increased from 15
-  Math.PI / 6,
-  0.4,
-  1.2
+  2.6,        // 🔦 slightly brighter
+  18,
+  Math.PI/7,
+  0.35,
+  1
 );
-flashlight.position.set(0, 0, 0);
-flashlight.target.position.set(0, 0, -1);
+flashlight.position.set(0,0,0);
+flashlight.target.position.set(0,0,-1);
 camera.add(flashlight);
 camera.add(flashlight.target);
 scene.add(camera);
 
-/* ================= MATERIALS ================= */
-const wallMat = new THREE.MeshStandardMaterial({
-  color: 0x1a1a1a,
-  roughness: 0.9
+/* ================= PLAYER ================= */
+const player = {
+  velocity:new THREE.Vector3(),
+  speed:2.4,
+  sprint:4.2,
+  height:1.6
+};
+
+/* ================= INPUT ================= */
+const keys = {};
+document.addEventListener("keydown",e=>keys[e.code]=true);
+document.addEventListener("keyup",e=>keys[e.code]=false);
+
+let yaw=0, pitch=0;
+document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
+
+document.body.addEventListener("click",()=>{
+  document.body.requestPointerLock();
 });
-const floorMat = new THREE.MeshStandardMaterial({
-  color: 0x121212,
-  roughness: 0.95
+
+document.addEventListener("mousemove",e=>{
+  if(document.pointerLockElement!==document.body) return;
+  yaw -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-1.4, Math.min(1.4, pitch));
 });
 
-/* ================= ROOM ================= */
-function room(x, z) {
-  const g = new THREE.Group();
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  g.add(floor);
-
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), wallMat);
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.y = 4;
-  g.add(ceiling);
-
-  const walls = [
-    [0, 2, -5, 0],
-    [0, 2, 5, Math.PI],
-    [-5, 2, 0, Math.PI / 2],
-    [5, 2, 0, -Math.PI / 2]
-  ];
-
-  walls.forEach(w => {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(10, 4), wallMat);
-    wall.position.set(w[0], w[1], w[2]);
-    wall.rotation.y = w[3];
-    g.add(wall);
-  });
-
-  g.position.set(x, 0, z);
-  scene.add(g);
+/* ================= COLLISION ================= */
+const colliders = [];
+function solid(mesh){
+  colliders.push(mesh);
+  scene.add(mesh);
 }
 
-room(0, 0);
+/* ================= MATERIALS ================= */
+const wallMat = new THREE.MeshStandardMaterial({color:0x1b1b1b, roughness:0.9});
+const floorMat = new THREE.MeshStandardMaterial({color:0x141414, roughness:0.95});
+
+/* ================= ROOM BUILDER ================= */
+function buildRoom(x,z,w,d,doors={}) {
+  const h=3;
+
+  // floor
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(w,0.1,d),
+    floorMat
+  );
+  floor.position.set(x,0,z);
+  solid(floor);
+
+  // ceiling
+  const ceil = new THREE.Mesh(
+    new THREE.BoxGeometry(w,0.1,d),
+    wallMat
+  );
+  ceil.position.set(x,h,z);
+  solid(ceil);
+
+  // walls
+  const walls = [
+    {dx:0,dz:-d/2, w:w, d:0.2, door:doors.north},
+    {dx:0,dz:d/2,  w:w, d:0.2, door:doors.south},
+    {dx:-w/2,dz:0, w:0.2, d:d, door:doors.west},
+    {dx:w/2,dz:0,  w:0.2, d:d, door:doors.east},
+  ];
+
+  walls.forEach(wl=>{
+    if(wl.door){
+      const gap=1.2;
+      const side=(wl.w>wl.d);
+      const left = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          side?(wl.w-gap)/2:wl.w,
+          h,
+          side?wl.d: (wl.d-gap)/2
+        ),
+        wallMat
+      );
+      const right = left.clone();
+
+      if(side){
+        left.position.set(x-(gap/2+(wl.w-gap)/4),h/2,z+wl.dz);
+        right.position.set(x+(gap/2+(wl.w-gap)/4),h/2,z+wl.dz);
+      } else {
+        left.position.set(x+wl.dx,h/2,z-(gap/2+(wl.d-gap)/4));
+        right.position.set(x+wl.dx,h/2,z+(gap/2+(wl.d-gap)/4));
+      }
+      solid(left); solid(right);
+
+      // door
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(1,2,0.15),
+        new THREE.MeshStandardMaterial({color:0x4a0e0e, roughness:0.6})
+      );
+      door.position.set(
+        x+wl.dx*0.9,
+        1,
+        z+wl.dz*0.9
+      );
+      door.userData.open=false;
+      scene.add(door);
+    } else {
+      const wall = new THREE.Mesh(
+        new THREE.BoxGeometry(wl.w,h,wl.d),
+        wallMat
+      );
+      wall.position.set(x+wl.dx,h/2,z+wl.dz);
+      solid(wall);
+    }
+  });
+}
+
+/* ================= MAP LAYOUT ================= */
+// Central room
+buildRoom(0,0,6,6,{north:true});
+
+// Corridor
+buildRoom(0,-6,3,6,{south:true,north:true});
+
+// Side rooms
+buildRoom(-6,-6,6,6,{east:true});
+buildRoom(6,-6,6,6,{west:true});
 
 /* ================= MOVEMENT ================= */
-const keys = {};
-addEventListener("keydown", e => keys[e.code] = true);
-addEventListener("keyup", e => keys[e.code] = false);
-
-let velocity = new THREE.Vector3();
-const clock = new THREE.Clock();
+function collide(pos){
+  for(const c of colliders){
+    const box=new THREE.Box3().setFromObject(c);
+    if(box.containsPoint(pos)) return true;
+  }
+  return false;
+}
 
 /* ================= LOOP ================= */
-function animate() {
+const clock = new THREE.Clock();
+function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
-  velocity.set(0, 0, 0);
-  const speed = keys["ShiftLeft"] ? 6 : 3;
+  camera.rotation.set(pitch,yaw,0);
 
-  if (keys["KeyW"]) velocity.z -= speed * dt;
-  if (keys["KeyS"]) velocity.z += speed * dt;
-  if (keys["KeyA"]) velocity.x -= speed * dt;
-  if (keys["KeyD"]) velocity.x += speed * dt;
+  let dir=new THREE.Vector3(
+    (keys.KeyD?1:0)-(keys.KeyA?1:0),
+    0,
+    (keys.KeyS?1:0)-(keys.KeyW?1:0)
+  );
+  if(dir.length()>0) dir.normalize();
 
-  controls.moveRight(velocity.x);
-  controls.moveForward(velocity.z);
+  const speed=(keys.ShiftLeft?player.sprint:player.speed)*dt;
+  dir.applyAxisAngle(new THREE.Vector3(0,1,0),yaw);
+  const next=camera.position.clone().addScaledVector(dir,speed);
 
-  renderer.render(scene, camera);
+  if(!collide(next)){
+    camera.position.copy(next);
+  }
+
+  renderer.render(scene,camera);
 }
 animate();
 
-/* ================= RESIZE ================= */
-addEventListener("resize", () => {
-  camera.aspect = innerWidth / innerHeight;
+window.addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(innerWidth,innerHeight);
 });
 </script>
 </body>
